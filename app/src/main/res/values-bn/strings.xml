@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">FMHuB24</string>
+    <string name="tagline">বিনামূল্যে দেখুন</string>
+    <string name="app_language_follow_system" translatable="false">System default</string>
+    <string name="welcome_title">আপনার ভাষা বেছে নিন</string>
+    <string name="welcome_subtitle">পরে সেটিংস থেকে পরিবর্তন করা যাবে।</string>
+    <string name="continue_button">চালিয়ে যান</string>
+    <string name="home_title">হোম</string>
+    <string name="home_subtitle">আপনার পরের পছন্দের ভিডিও এখানেই।</string>
+    <string name="appearance_title">চেহারা</string>
+    <string name="language_title">ভাষা</string>
+    <string name="catalog_not_connected">ক্যাটালগ এখনো সংযুক্ত হয়নি।</string>
+    <string name="catalog_not_connected_detail">Supabase ক্যাটালগ চালু না হওয়া পর্যন্ত কোনো শিরোনাম দেখানো হবে না।</string>
+    <string name="language_bengali">বাংলা</string>
+    <string name="language_english">English</string>
+    <string name="theme_system">সিস্টেম</string>
+    <string name="theme_dark">ডার্ক</string>
+    <string name="theme_light">লাইট</string>
+</resources>

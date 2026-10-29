@@ -1,0 +1,8 @@
+<resources>
+    <color name="fmhub_splash_dark">#05052B</color>
+    <color name="fmhub_splash_light">#F6F8FF</color>
+    <color name="fmhub_mark_violet_start">#5A46E6</color>
+    <color name="fmhub_mark_violet_end">#3A7BF0</color>
+    <color name="fmhub_mark_cyan_start">#22D6F0</color>
+    <color name="fmhub_mark_cyan_end">#2F78EE</color>
+</resources>

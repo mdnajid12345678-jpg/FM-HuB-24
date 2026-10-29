@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">FMHuB24</string>
+    <string name="tagline">JUST WATCH FREE</string>
+    <string name="app_language_follow_system" translatable="false">System default</string>
+    <string name="welcome_title">Choose your language</string>
+    <string name="welcome_subtitle">You can change it later in Settings.</string>
+    <string name="continue_button">Continue</string>
+    <string name="home_title">Home</string>
+    <string name="home_subtitle">Your next watch starts here.</string>
+    <string name="appearance_title">Appearance</string>
+    <string name="language_title">Language</string>
+    <string name="catalog_not_connected">Catalog is not connected yet.</string>
+    <string name="catalog_not_connected_detail">No titles are shown until the Supabase catalog is available.</string>
+    <string name="language_bengali">বাংলা</string>
+    <string name="language_english">English</string>
+    <string name="theme_system">System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+</resources>
