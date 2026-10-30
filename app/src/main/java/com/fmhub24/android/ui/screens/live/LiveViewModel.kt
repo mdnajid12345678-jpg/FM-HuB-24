@@ -7,8 +7,7 @@ import com.fmhub24.android.data.model.DataException
 import com.fmhub24.android.data.model.HomeCategory
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.inCategory
-import com.fmhub24.android.data.repo.CatalogRepository
-import com.fmhub24.android.data.repo.SourcesRepository
+import com.fmhub24.android.data.repo.LiveTvRepository
 import com.fmhub24.android.data.repo.WatchStateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -27,23 +26,23 @@ data class LiveUiState(
 
 @HiltViewModel
 class LiveViewModel @Inject constructor(
-    private val catalog: CatalogRepository,
+    private val liveTvRepository: LiveTvRepository,
     private val watchState: WatchStateRepository,
-    private val sourceRepository: SourcesRepository,
 ) : ViewModel() {
     private val loading = MutableStateFlow(true)
     private val error = MutableStateFlow<DataException?>(null)
+    private val channels = MutableStateFlow<List<MediaItem>>(emptyList())
 
     private val channelSources = MutableStateFlow<List<com.fmhub24.android.data.model.MediaSource>>(emptyList())
     val channelSourcesState: StateFlow<List<com.fmhub24.android.data.model.MediaSource>> = channelSources
     private val sourcesLoading = MutableStateFlow(false)
     val sourcesLoadingState: StateFlow<Boolean> = sourcesLoading
 
-    val state: StateFlow<LiveUiState> = combine(catalog.contents, loading, error) { items, isLoading, failure ->
+    val state: StateFlow<LiveUiState> = combine(channels, loading, error) { items, isLoading, failure ->
         LiveUiState(
             loading = isLoading,
             error = failure,
-            channels = items.filter { it.isLive },
+            channels = items,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveUiState())
 
@@ -57,7 +56,14 @@ class LiveViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             loading.value = true
-            error.value = catalog.refresh()
+            try {
+                channels.value = liveTvRepository.channels()
+                error.value = null
+            } catch (failure: DataException) {
+                error.value = failure
+            } catch (failure: Exception) {
+                error.value = DataException.Malformed(failure.message ?: "live_tv")
+            }
             loading.value = false
         }
     }
@@ -78,7 +84,7 @@ class LiveViewModel @Inject constructor(
         viewModelScope.launch {
             sourcesLoading.value = true
             channelSources.value = runCatching {
-                sourceRepository.forContent(contentId)
+                liveTvRepository.sources(contentId)
             }.getOrDefault(emptyList())
             sourcesLoading.value = false
         }
