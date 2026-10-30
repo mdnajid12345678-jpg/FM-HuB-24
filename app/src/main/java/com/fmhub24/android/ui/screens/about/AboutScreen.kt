@@ -37,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -78,13 +77,13 @@ fun AboutScreen(onBack: () -> Unit) {
             )
         }
 
-        // Logo on the navy brand background (spec 6.9).
+        // Brand mark on the shared forest-green surface.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .height(180.dp)
-                .background(Color(0xFF05052B), RoundedCornerShape(14.dp)),
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(18.dp)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -92,7 +91,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Text(
                 text = stringRes(R.string.app_name),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 4.sp,
@@ -100,7 +99,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringRes(R.string.tagline),
-                color = Color(0xFF3EA6FF),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 11.sp,
                 letterSpacing = 3.sp,
             )

@@ -141,7 +141,7 @@ private fun SplashScreen() {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF05052B), Color(0xFF0D0D3D)),
+                    listOf(Color(0xFF08130F), Color(0xFF14221D)),
                 ),
             ),
         contentAlignment = Alignment.Center,
@@ -169,7 +169,7 @@ private fun SplashScreen() {
             ) {
                 Text(
                     text = stringResource(R.string.tagline),
-                    color = Color(0xFF3EA6FF),
+                    color = Color(0xFFF4B84A),
                     fontSize = 11.sp,
                     letterSpacing = 3.sp,
                 )
@@ -240,7 +240,7 @@ private fun LanguagePickerScreen(onContinue: (String) -> Unit) {
                     text = label,
                     fontSize = 15.sp,
                     color = if (selected) {
-                        Color(0xFFBFD8FF)
+                        MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },

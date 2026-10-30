@@ -10,9 +10,9 @@ import com.fmhub24.android.data.ThemeMode
 
 private val DarkColors = darkColorScheme(
     primary = DarkPrimary,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF142C61),
-    onPrimaryContainer = DarkPrimaryText,
+    onPrimary = DarkPrimaryText,
+    primaryContainer = Color(0xFF4C3916),
+    onPrimaryContainer = DarkOnPrimaryContainer,
     secondary = DarkCyan,
     onSecondary = DarkBackground,
     tertiary = DarkViolet,
@@ -29,7 +29,7 @@ private val DarkColors = darkColorScheme(
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
     onPrimary = Color.White,
-    primaryContainer = LightPrimary.copy(alpha = 0.12f),
+    primaryContainer = LightPrimaryContainer,
     onPrimaryContainer = LightInk,
     secondary = LightCyan,
     onSecondary = Color.White,

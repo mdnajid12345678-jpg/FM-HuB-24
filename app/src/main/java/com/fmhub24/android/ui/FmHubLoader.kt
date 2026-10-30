@@ -35,18 +35,18 @@ fun FmHubLoader(modifier: Modifier = Modifier.size(96.dp)) {
         label = "FMHuB24 logo clock",
     )
     val animationsEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
-    val violet = Brush.linearGradient(listOf(Color(0xFF5A46E6), Color(0xFF3A7BF0)))
-    val cyan = Brush.linearGradient(listOf(Color(0xFF22D6F0), Color(0xFF2F78EE)))
+    val amber = Brush.linearGradient(listOf(Color(0xFFF4B84A), Color(0xFFD89A55)))
+    val green = Brush.linearGradient(listOf(Color(0xFF51D49B), Color(0xFF287A60)))
 
     Canvas(modifier) {
         val scale = size.width / 300f
         // The five layers are defined as polygons of the 300x300 logo viewBox.
         val barPolygons = listOf(
-            arrayOf(30f to 30f, 165f to 108f, 30f to 108f) to violet,
-            arrayOf(30f to 112f, 150f to 112f, 105f to 150f, 30f to 150f) to cyan,
-            arrayOf(30f to 160f, 82f to 180f, 30f to 200f) to cyan,
-            arrayOf(30f to 208f, 112f to 208f, 140f to 224f, 30f to 250f) to violet,
-            arrayOf(30f to 254f, 135f to 254f, 30f to 286f) to cyan,
+            arrayOf(30f to 30f, 165f to 108f, 30f to 108f) to amber,
+            arrayOf(30f to 112f, 150f to 112f, 105f to 150f, 30f to 150f) to green,
+            arrayOf(30f to 160f, 82f to 180f, 30f to 200f) to green,
+            arrayOf(30f to 208f, 112f to 208f, 140f to 224f, 30f to 250f) to amber,
+            arrayOf(30f to 254f, 135f to 254f, 30f to 286f) to green,
         )
         val triangle = arrayOf(170f to 100f, 282f to 165f, 158f to 225f)
         val highlight = arrayOf(170f to 100f, 282f to 165f, 214f to 158f, 170f to 134f)
@@ -55,7 +55,7 @@ fun FmHubLoader(modifier: Modifier = Modifier.size(96.dp)) {
             barPolygons.forEach { (points, brush) ->
                 drawPath(polygon(scale, points, offsetX = 0f), brush)
             }
-            drawPath(polygon(scale, triangle, offsetX = 0f), cyan)
+            drawPath(polygon(scale, triangle, offsetX = 0f), amber)
             drawPath(
                 polygon(scale, highlight, offsetX = 0f),
                 Color.White.copy(alpha = 0.18f),
@@ -71,7 +71,7 @@ fun FmHubLoader(modifier: Modifier = Modifier.size(96.dp)) {
 
             val triangleAlpha = segment(progress, 0.15f, 0.30f) *
                 (1f - segment(progress, 0.85f, 1f))
-            drawPath(polygon(scale, triangle, offsetX = 0f), cyan, alpha = triangleAlpha)
+            drawPath(polygon(scale, triangle, offsetX = 0f), amber, alpha = triangleAlpha)
             drawPath(
                 polygon(scale, highlight, offsetX = 0f),
                 Color.White,

@@ -45,7 +45,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -164,7 +163,7 @@ fun DangerButton(
 
 /**
  * Design chips (FMHuB24_Designs.html `.c`): 12sp label, 14dp radius, surface background with a
- * hairline border; the selected chip sits on a translucent accent with a #BFD8FF label. The
+ * hairline border; the selected chip sits on a translucent amber accent with a readable label. The
  * padding keeps a comfortable touch height for tappable chips (season, category, filters).
  */
 private val ChipShape = RoundedCornerShape(14.dp)
@@ -234,9 +233,9 @@ fun DesignChip(
             fontSize = 12.sp,
             maxLines = 1,
             color = if (selected) {
-                Color(0xFFBFD8FF)
+                MaterialTheme.colorScheme.primary
             } else {
-                Color.White.copy(alpha = 0.68f)
+                MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
     }

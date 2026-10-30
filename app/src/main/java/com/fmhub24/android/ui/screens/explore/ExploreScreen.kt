@@ -34,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -236,9 +235,9 @@ private fun FilterChipLabel(label: String, active: Boolean, onClick: () -> Unit)
                 text = label,
                 fontSize = 11.sp,
                 color = if (active) {
-                    Color(0xFFBFD8FF)
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    Color.White.copy(alpha = 0.68f)
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
             if (active) {

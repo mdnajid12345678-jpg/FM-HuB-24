@@ -1,8 +1,8 @@
 <resources>
-    <color name="fmhub_splash_dark">#05052B</color>
-    <color name="fmhub_splash_light">#F6F8FF</color>
-    <color name="fmhub_mark_violet_start">#5A46E6</color>
-    <color name="fmhub_mark_violet_end">#3A7BF0</color>
-    <color name="fmhub_mark_cyan_start">#22D6F0</color>
-    <color name="fmhub_mark_cyan_end">#2F78EE</color>
+    <color name="fmhub_splash_dark">#08130F</color>
+    <color name="fmhub_splash_light">#F3F6F2</color>
+    <color name="fmhub_mark_amber_start">#F4B84A</color>
+    <color name="fmhub_mark_amber_end">#D89A55</color>
+    <color name="fmhub_mark_green_start">#51D49B</color>
+    <color name="fmhub_mark_green_end">#287A60</color>
 </resources>

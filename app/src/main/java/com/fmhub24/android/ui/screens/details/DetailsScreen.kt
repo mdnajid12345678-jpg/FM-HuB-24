@@ -332,7 +332,10 @@ private fun Banner(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0x9905052B), Color(0xE605052B)),
+                        listOf(
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.60f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.90f),
+                        ),
                     ),
                 ),
         )
@@ -704,7 +707,7 @@ private fun EpisodeList(
                     matchesHistory && progress > 0f -> Text(
                         text = stringRes(R.string.progress_percent, (progress * 100).toInt()),
                         fontSize = 12.sp,
-                        color = Color(0xFF7DB0FF),
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     else -> IconButton(
                         onClick = { onDownload(episode) },

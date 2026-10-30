@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -151,7 +150,7 @@ private fun SectionCaption(text: String) {
     Text(
         text = text,
         fontSize = 11.sp,
-        color = Color.White.copy(alpha = 0.45f),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
     )
 }
@@ -187,7 +186,7 @@ private fun ProfileRow(title: String, onClick: () -> Unit, value: String? = null
             Text(
                 text = value,
                 fontSize = 12.sp,
-                color = Color.White.copy(alpha = 0.45f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
             Spacer(Modifier.width(6.dp))
@@ -195,7 +194,7 @@ private fun ProfileRow(title: String, onClick: () -> Unit, value: String? = null
         Icon(
             Icons.Outlined.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.45f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
     }

@@ -1,9 +1,9 @@
 <resources>
     <style name="Theme.FMHuB24" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#2F78EE</item>
-        <item name="android:statusBarColor">#05052B</item>
-        <item name="android:navigationBarColor">#05052B</item>
+        <item name="android:colorAccent">#F4B84A</item>
+        <item name="android:statusBarColor">#08130F</item>
+        <item name="android:navigationBarColor">#08130F</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 

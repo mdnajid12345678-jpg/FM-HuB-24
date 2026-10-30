@@ -8,12 +8,12 @@
         android:scaleY="0.7"
         android:pivotX="150"
         android:pivotY="150">
-        <path android:fillColor="#5A46E6" android:pathData="M30,30 L165,108 L30,108 Z" />
-        <path android:fillColor="#22D6F0" android:pathData="M30,112 L150,112 L105,150 L30,150 Z" />
-        <path android:fillColor="#22D6F0" android:pathData="M30,160 L82,180 L30,200 Z" />
-        <path android:fillColor="#5A46E6" android:pathData="M30,208 L112,208 L140,224 L30,250 Z" />
-        <path android:fillColor="#22D6F0" android:pathData="M30,254 L135,254 L30,286 Z" />
-        <path android:fillColor="#2F78EE" android:pathData="M170,100 L282,165 L158,225 Z" />
+        <path android:fillColor="@color/fmhub_mark_amber_start" android:pathData="M30,30 L165,108 L30,108 Z" />
+        <path android:fillColor="@color/fmhub_mark_green_start" android:pathData="M30,112 L150,112 L105,150 L30,150 Z" />
+        <path android:fillColor="@color/fmhub_mark_green_end" android:pathData="M30,160 L82,180 L30,200 Z" />
+        <path android:fillColor="@color/fmhub_mark_amber_end" android:pathData="M30,208 L112,208 L140,224 L30,250 Z" />
+        <path android:fillColor="@color/fmhub_mark_green_start" android:pathData="M30,254 L135,254 L30,286 Z" />
+        <path android:fillColor="@color/fmhub_mark_amber_start" android:pathData="M170,100 L282,165 L158,225 Z" />
         <path android:fillColor="#2EFFFFFF" android:pathData="M170,100 L282,165 L214,158 L170,134 Z" />
     </group>
 </vector>

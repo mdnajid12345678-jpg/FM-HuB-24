@@ -159,7 +159,7 @@ fun PlayerScreen(
         if (fullscreen) fullscreen = false else onBack()
     }
 
-    val background = Color(0xFF05052B)
+    val background = MaterialTheme.colorScheme.background
 
     when {
         state.loading && state.source == null -> Box(
@@ -952,7 +952,7 @@ private fun LanguageServerPanel(
         Text(
             text = stringRes(R.string.report_problem),
             fontSize = 12.sp,
-            color = Color(0xFF3EA6FF),
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.clickable(onClick = onReport),
         )
     }
@@ -997,7 +997,7 @@ private fun PanelRow(
             text = label,
             fontSize = 12.sp,
             color = if (selected && supported) {
-                Color(0xFFBFD8FF)
+                MaterialTheme.colorScheme.primary
             } else {
                 Color.White
             },
@@ -1087,7 +1087,7 @@ private fun EpisodePlaylist(
 ) {
     Column(
         modifier = modifier
-            .background(Color(0xFF05052B))
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Text(
@@ -1241,11 +1241,11 @@ private fun FailureOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF05052B)),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
         FailureContent(
-            background = Color(0xFF05052B),
+            background = MaterialTheme.colorScheme.background,
             message = when (failure) {
                 StreamError.EXPIRED -> stringRes(R.string.link_expired)
                 StreamError.OFFLINE -> stringRes(R.string.state_network_error)
@@ -1327,7 +1327,7 @@ private fun FailureContent(
             TextButton(onClick = { onTry(alternatives.first()) }) {
                 Text(
                     text = stringRes(R.string.try_now),
-                    color = Color(0xFF3EA6FF),
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp,
                 )
             }
@@ -1337,7 +1337,7 @@ private fun FailureContent(
             TextButton(onClick = onReport) {
                 Text(
                     text = reportLabel,
-                    color = Color(0xFF3EA6FF),
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp,
                 )
             }
