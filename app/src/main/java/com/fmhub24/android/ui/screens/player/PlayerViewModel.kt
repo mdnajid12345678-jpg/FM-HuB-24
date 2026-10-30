@@ -16,6 +16,8 @@ import com.fmhub24.android.data.repo.DownloadsRepository
 import com.fmhub24.android.data.repo.SourcesRepository
 import com.fmhub24.android.data.repo.SourceSelection
 import com.fmhub24.android.data.repo.WatchStateRepository
+import com.fmhub24.android.stream.DownloadAnalyzer
+import com.fmhub24.android.stream.DownloadEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -51,6 +53,8 @@ data class PlayerUiState(
         get() = episode?.let { "S${it.seasonNumber} E${it.episodeNumber}" }.orEmpty()
 }
 
+enum class SubtitleDownloadStatus { IDLE, DOWNLOADING, STARTED, UNAVAILABLE, FAILED }
+
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     savedState: SavedStateHandle,
@@ -62,6 +66,10 @@ class PlayerViewModel @Inject constructor(
     private val downloads: DownloadsRepository,
 ) : ViewModel() {
     val playbackSpeed = preferences.settings.map { it.playbackSpeed }
+    val autoMiniplayer = preferences.settings.map { it.autoMiniplayer }
+    val subtitleSize = preferences.settings.map { it.subtitleSize }
+    val subtitleDelayMs = preferences.settings.map { it.subtitleDelayMs }
+    val bilingualSubtitles = preferences.settings.map { it.bilingualSubtitles }
     val contentId: String = savedState.get<String>("contentId").orEmpty()
     private val episodeKey: String? = savedState.get<String>("episodeKey").orEmpty()
         .takeIf { it.isNotEmpty() }
@@ -73,6 +81,8 @@ class PlayerViewModel @Inject constructor(
 
     private val reportMessage = MutableStateFlow<String?>(null)
     val reportResult: StateFlow<String?> = reportMessage
+    private val subtitleDownloadMessage = MutableStateFlow(SubtitleDownloadStatus.IDLE)
+    val subtitleDownloadStatus: StateFlow<SubtitleDownloadStatus> = subtitleDownloadMessage
 
     init {
         prepare()
@@ -333,6 +343,22 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.savePlaybackSpeed(speed) }
     }
 
+    fun setAutoMiniplayer(enabled: Boolean) {
+        viewModelScope.launch { preferences.saveAutoMiniplayer(enabled) }
+    }
+
+    fun saveSubtitleSize(size: String) {
+        viewModelScope.launch { preferences.saveSubtitleSize(size) }
+    }
+
+    fun saveSubtitleDelay(delayMs: Int) {
+        viewModelScope.launch { preferences.saveSubtitleDelay(delayMs) }
+    }
+
+    fun setBilingualSubtitles(enabled: Boolean) {
+        viewModelScope.launch { preferences.saveBilingualSubtitles(enabled) }
+    }
+
     fun switchSource(source: MediaSource, positionMs: Long, durationMs: Long) {
         attemptedSources.clear()
         attemptedSources += sourceFamily(source)
@@ -420,6 +446,41 @@ class PlayerViewModel @Inject constructor(
 
     fun dismissReport() {
         reportMessage.value = null
+    }
+
+    fun downloadSubtitle(language: String?) {
+        val current = state.value
+        val source = current.source
+        if (language.isNullOrBlank() || source == null || source.status == "offline") {
+            subtitleDownloadMessage.value = SubtitleDownloadStatus.UNAVAILABLE
+            return
+        }
+        subtitleDownloadMessage.value = SubtitleDownloadStatus.DOWNLOADING
+        viewModelScope.launch {
+            try {
+                val target = current.episode?.key ?: "movie"
+                val id = "subtitle-${(contentId + target + language).hashCode()}"
+                val request = DownloadAnalyzer.buildSubtitleRequest(
+                    context = context,
+                    id = id,
+                    source = source,
+                    headers = source.headers,
+                    language = language,
+                )
+                if (request == null) {
+                    subtitleDownloadMessage.value = SubtitleDownloadStatus.UNAVAILABLE
+                } else {
+                    DownloadEngine.add(context, request)
+                    subtitleDownloadMessage.value = SubtitleDownloadStatus.STARTED
+                }
+            } catch (_: Exception) {
+                subtitleDownloadMessage.value = SubtitleDownloadStatus.FAILED
+            }
+        }
+    }
+
+    fun clearSubtitleDownloadStatus() {
+        subtitleDownloadMessage.value = SubtitleDownloadStatus.IDLE
     }
 
     fun shareText(): String {

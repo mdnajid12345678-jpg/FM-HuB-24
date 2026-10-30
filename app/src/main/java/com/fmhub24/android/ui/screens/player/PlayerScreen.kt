@@ -6,9 +6,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.graphics.Typeface
 import android.media.AudioManager
 import android.os.Build
-import android.view.SurfaceView
+import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -44,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.Forward10
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
@@ -59,12 +63,17 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -96,9 +105,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.media3.common.C
 import androidx.media3.common.Tracks
+import androidx.media3.common.text.CueGroup
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import com.fmhub24.android.R
+import com.fmhub24.android.MainActivity
 import com.fmhub24.android.data.model.CodecSupport
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaSource
@@ -115,13 +130,14 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 private enum class SeekRipple { LEFT, RIGHT }
-private enum class PlayerPanel { AUDIO, SERVERS, QUALITY, EPISODES, SPEED }
+private enum class PlayerPanel { AUDIO, SERVERS, QUALITY, EPISODES, SPEED, SETTINGS, STYLE, DELAY }
 private enum class DragSide { LEFT, RIGHT }
 
 private data class TrackChoice(
     val groupIndex: Int,
     val trackIndex: Int,
     val label: String?,
+    val languageCode: String?,
     val selected: Boolean,
 )
 
@@ -139,6 +155,7 @@ private fun trackChoices(tracks: Tracks, type: Int): List<TrackChoice> = buildLi
                     groupIndex = groupIndex,
                     trackIndex = trackIndex,
                     label = label,
+                    languageCode = format.language,
                     selected = group.isTrackSelected(trackIndex),
                 ),
             )
@@ -188,6 +205,11 @@ fun PlayerScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val savedPlaybackSpeed by viewModel.playbackSpeed.collectAsState(initial = 1f)
+    val autoMiniplayer by viewModel.autoMiniplayer.collectAsState(initial = false)
+    val savedSubtitleSize by viewModel.subtitleSize.collectAsState(initial = "medium")
+    val subtitleDelayMs by viewModel.subtitleDelayMs.collectAsState(initial = 0)
+    val bilingualSubtitles by viewModel.bilingualSubtitles.collectAsState(initial = false)
+    val subtitleDownloadStatus by viewModel.subtitleDownloadStatus.collectAsState()
     val activity = LocalContext.current.findActivity()
 
     var fullscreen by remember(contentId) { mutableStateOf(initialFullscreen) }
@@ -201,7 +223,14 @@ fun PlayerScreen(
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            (activity as? MainActivity)?.setPlayerActive(false)
         }
+    }
+
+    LaunchedEffect(activity, state.source, state.loading, state.failure) {
+        (activity as? MainActivity)?.setPlayerActive(
+            active = !state.loading && state.source != null && state.failure == null,
+        )
     }
 
     LaunchedEffect(activity, fullscreen) {
@@ -255,6 +284,11 @@ fun PlayerScreen(
             state = state,
             viewModel = viewModel,
             savedPlaybackSpeed = savedPlaybackSpeed,
+            autoMiniplayer = autoMiniplayer,
+            savedSubtitleSize = savedSubtitleSize,
+            subtitleDelayMs = subtitleDelayMs,
+            bilingualSubtitles = bilingualSubtitles,
+            subtitleDownloadStatus = subtitleDownloadStatus,
             isFullscreen = fullscreen,
             onToggleFullscreen = { fullscreen = !fullscreen },
             onBack = onBack,
@@ -281,6 +315,11 @@ private fun PlayerContent(
     state: PlayerUiState,
     viewModel: PlayerViewModel,
     savedPlaybackSpeed: Float,
+    autoMiniplayer: Boolean,
+    savedSubtitleSize: String,
+    subtitleDelayMs: Int,
+    bilingualSubtitles: Boolean,
+    subtitleDownloadStatus: SubtitleDownloadStatus,
     isFullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
     onBack: () -> Unit,
@@ -288,6 +327,10 @@ private fun PlayerContent(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val activity = context.findActivity()
+    val settingsPanelWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { 336.dp.toPx() }
+    val settingsPanelTopPx = with(androidx.compose.ui.platform.LocalDensity.current) { 58.dp.toPx() }
+    val settingsPanelBottomPx = with(androidx.compose.ui.platform.LocalDensity.current) { 178.dp.toPx() }
     val source = state.source ?: return
     val headers = source.headers
 
@@ -305,7 +348,7 @@ private fun PlayerContent(
     }
 
     DisposableEffect(source.mediaUrl) {
-        val window = context.findActivity()?.window
+        val window = activity?.window
         window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -339,7 +382,9 @@ private fun PlayerContent(
 
     DisposableEffect(lifecycleOwner, player) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE &&
+                activity?.isInPictureInPictureMode != true
+            ) {
                 player.pause()
                 if (player.duration > 0L) {
                     viewModel.recordProgress(player.currentPosition, player.duration)
@@ -380,6 +425,44 @@ private fun PlayerContent(
         ?: stringRes(R.string.quality_auto)
     var lastSavedBucket by remember { mutableLongStateOf(0L) }
     var fitToScreen by remember(source.mediaUrl) { mutableStateOf(true) }
+    val subtitleTextSize = when (savedSubtitleSize) {
+        "small" -> 0.04f
+        "large" -> 0.068f
+        else -> SubtitleView.DEFAULT_TEXT_SIZE_FRACTION
+    }
+    val subtitleFontSize = when (savedSubtitleSize) {
+        "small" -> 13.sp
+        "large" -> 21.sp
+        else -> 17.sp
+    }
+    var subtitleText by remember(player) { mutableStateOf("") }
+    val delayedCueEvents = remember(player) { mutableListOf<Pair<Long, String>>() }
+
+    DisposableEffect(player, subtitleDelayMs) {
+        delayedCueEvents.clear()
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onCues(cueGroup: CueGroup) {
+                val text = cueGroup.cues.mapNotNull { it.text?.toString() }
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n")
+                delayedCueEvents += (player.currentPosition + subtitleDelayMs.toLong()) to text
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    LaunchedEffect(player, subtitleDelayMs) {
+        while (true) {
+            val now = player.currentPosition
+            val dueEvents = delayedCueEvents.filter { it.first <= now }
+            if (dueEvents.isNotEmpty()) {
+                subtitleText = dueEvents.last().second
+                delayedCueEvents.removeAll { it.first <= now }
+            }
+            delay(40)
+        }
+    }
 
     LaunchedEffect(player) {
         while (true) {
@@ -404,19 +487,17 @@ private fun PlayerContent(
 
 
     var showControls by remember { mutableStateOf(true) }
-    LaunchedEffect(showControls, isPlaying) {
-        if (showControls && isPlaying) {
-            delay(4_000)
-            showControls = false
+    var locked by remember { mutableStateOf(false) }
+    var panel by remember { mutableStateOf<PlayerPanel?>(null) }
+
+    LaunchedEffect(startAt) {
+        if (startAt > 0L) {
+            delayedCueEvents.clear()
+            subtitleText = ""
+            player.seekTo(startAt)
         }
     }
 
-    LaunchedEffect(startAt) {
-        if (startAt > 0L) player.seekTo(startAt)
-    }
-
-    var locked by remember { mutableStateOf(false) }
-    var panel by remember { mutableStateOf<PlayerPanel?>(null) }
     var speed by remember(savedPlaybackSpeed) { mutableFloatStateOf(savedPlaybackSpeed) }
     var gestureHint by remember { mutableStateOf<Pair<String, Float>?>(null) }
     var seekRipple by remember { mutableStateOf<SeekRipple?>(null) }
@@ -446,7 +527,6 @@ private fun PlayerContent(
     val audioManager = remember {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
-    val activity = context.findActivity()
     val brightnessLabel = stringRes(R.string.player_brightness)
     val volumeLabel = stringRes(R.string.player_volume)
     val reportLabel = stringRes(R.string.report_problem)
@@ -456,17 +536,50 @@ private fun PlayerContent(
         modifier = (if (isFullscreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
             .aspectRatio(16f / 9f))
             .background(Color.Black)
-            .pointerInput(locked) {
+            .pointerInput(locked, panel, isFullscreen) {
                 detectTapGestures(
-                    onTap = {
-                        if (!locked) showControls = !showControls
+                    onTap = { offset ->
+                        if (!locked) {
+                            if (panel != null) {
+                                val panelStart = if (panel == PlayerPanel.SETTINGS) {
+                                    size.width - settingsPanelWidthPx
+                                } else {
+                                    val panelFraction = if (!isFullscreen) {
+                                        0.78f
+                                    } else {
+                                        when (panel) {
+                                            PlayerPanel.AUDIO -> 0.45f
+                                            PlayerPanel.EPISODES -> 0.34f
+                                            PlayerPanel.STYLE, PlayerPanel.DELAY -> 0.26f
+                                            else -> 0.20f
+                                        }
+                                    }
+                                    size.width * (1f - panelFraction)
+                                }
+                                val insidePanel = if (panel == PlayerPanel.SETTINGS) {
+                                    offset.x >= panelStart && offset.y in settingsPanelTopPx..settingsPanelBottomPx
+                                } else {
+                                    offset.x >= panelStart
+                                }
+                                if (!insidePanel) {
+                                    panel = null
+                                    showControls = true
+                                }
+                            } else {
+                                showControls = !showControls
+                            }
+                        }
                     },
                     onDoubleTap = { offset: Offset ->
                         if (!locked) {
                             if (offset.x < size.width / 2f) {
+                                delayedCueEvents.clear()
+                                subtitleText = ""
                                 player.seekTo((position - 10_000).coerceAtLeast(0L))
                                 seekRipple = SeekRipple.LEFT
                             } else {
+                                delayedCueEvents.clear()
+                                subtitleText = ""
                                 player.seekTo(position + 10_000)
                                 seekRipple = SeekRipple.RIGHT
                             }
@@ -504,10 +617,57 @@ private fun PlayerContent(
         ) {
             AndroidView(
                 factory = { ctx ->
-                    SurfaceView(ctx).apply { player.setVideoSurfaceView(this) }
+                    PlayerView(ctx).apply {
+                        useController = false
+                        this.player = player
+                        resizeMode = if (fitToScreen) {
+                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        } else {
+                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        }
+                        subtitleView?.apply {
+                            setUserDefaultStyle()
+                            setFractionalTextSize(subtitleTextSize)
+                            visibility = View.GONE
+                        }
+                    }
+                },
+                update = { view ->
+                    view.player = player
+                    view.resizeMode = if (fitToScreen) {
+                        AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    } else {
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    }
+                    view.subtitleView?.apply {
+                        setUserDefaultStyle()
+                        setFractionalTextSize(subtitleTextSize)
+                        visibility = View.GONE
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+
+        if (subtitleText.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = if (isFullscreen) 76.dp else 20.dp),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Text(
+                    text = subtitleText,
+                    color = Color.White,
+                    fontSize = subtitleFontSize,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .padding(horizontal = 42.dp)
+                        .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
         }
 
         seekRipple?.let { ripple ->
@@ -582,8 +742,8 @@ private fun PlayerContent(
             }
         }
 
-        if (!locked && !state.loading && (showControls || !isPlaying)) {
-            ControlsOverlay(
+        if (!locked && !state.loading && (showControls || !isPlaying || panel != null)) {
+            ReferenceControlsOverlay(
                 state = state,
                 position = position,
                 duration = duration,
@@ -591,22 +751,61 @@ private fun PlayerContent(
                 isFullscreen = isFullscreen,
                 speed = speed,
                 panel = panel,
+                autoMiniplayer = autoMiniplayer,
                 audioTracks = audioTracks,
                 subtitleTracks = subtitleTracks,
                 audioLabel = audioLabel,
                 fitToScreen = fitToScreen,
+                subtitleSize = savedSubtitleSize,
+                subtitleDelayMs = subtitleDelayMs,
+                bilingualSubtitles = bilingualSubtitles,
+                subtitleDownloadStatus = subtitleDownloadStatus,
                 onBack = onBack,
                 onToggleFullscreen = onToggleFullscreen,
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     showControls = true
                 },
-                onSeekTo = { seconds -> player.seekTo(seconds * 1000L) },
+                onSeekTo = { seconds ->
+                    delayedCueEvents.clear()
+                    subtitleText = ""
+                    player.seekTo(seconds * 1000L)
+                },
                 onPanel = { chosen ->
                     panel = if (panel == chosen) null else chosen
                     showControls = true
                 },
                 onToggleFit = { fitToScreen = !fitToScreen },
+                onAutoMiniplayerChange = viewModel::setAutoMiniplayer,
+                onSubtitleSize = viewModel::saveSubtitleSize,
+                onSubtitleDelay = viewModel::saveSubtitleDelay,
+                onBilingualSubtitles = { enabled ->
+                    val bilingualTrack = subtitleTracks.firstOrNull {
+                        it.label?.contains("bilingual", ignoreCase = true) == true
+                    }
+                    if (bilingualTrack != null) {
+                        if (enabled) {
+                            val group = tracks.groups[bilingualTrack.groupIndex]
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                .addOverride(
+                                    androidx.media3.common.TrackSelectionOverride(
+                                        group.mediaTrackGroup,
+                                        bilingualTrack.trackIndex,
+                                    ),
+                                )
+                                .build()
+                        } else {
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                .build()
+                        }
+                        viewModel.setBilingualSubtitles(enabled)
+                    }
+                },
+                onSubtitleDownload = viewModel::downloadSubtitle,
                 onSelectAudioTrack = { choice ->
                     val group = tracks.groups[choice.groupIndex]
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -619,24 +818,25 @@ private fun PlayerContent(
                             ),
                         )
                         .build()
-                    panel = null
                 },
                 onSelectSourceLanguage = { language ->
                     viewModel.switchLanguage(language, position, duration)
-                    panel = null
                 },
                 onSpeed = { value ->
                     speed = value
                     viewModel.savePlaybackSpeed(value)
-                    panel = null
                 },
                 onSubtitleOff = {
+                    delayedCueEvents.clear()
+                    subtitleText = ""
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                         .build()
                 },
                 onSubtitleSelect = { groupIndex, trackIndex ->
+                    delayedCueEvents.clear()
+                    subtitleText = ""
                     val group = tracks.groups[groupIndex]
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
@@ -651,7 +851,6 @@ private fun PlayerContent(
                 },
                 onServer = { server ->
                     viewModel.switchSource(server, position, duration)
-                    panel = null
                 },
                 onLock = {
                     locked = true
@@ -1699,5 +1898,549 @@ private fun enterPip(activity: Activity?) {
     activity ?: return
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         runCatching { activity.enterPictureInPictureMode() }
+    }
+}
+
+
+@Composable
+private fun ReferenceControlsOverlay(
+    state: PlayerUiState,
+    position: Long,
+    duration: Long,
+    isPlaying: Boolean,
+    isFullscreen: Boolean,
+    speed: Float,
+    panel: PlayerPanel?,
+    autoMiniplayer: Boolean,
+    audioTracks: List<TrackChoice>,
+    subtitleTracks: List<TrackChoice>,
+    audioLabel: String,
+    fitToScreen: Boolean,
+    subtitleSize: String,
+    subtitleDelayMs: Int,
+    bilingualSubtitles: Boolean,
+    subtitleDownloadStatus: SubtitleDownloadStatus,
+    onBack: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onPanel: (PlayerPanel) -> Unit,
+    onToggleFit: () -> Unit,
+    onAutoMiniplayerChange: (Boolean) -> Unit,
+    onSubtitleSize: (String) -> Unit,
+    onSubtitleDelay: (Int) -> Unit,
+    onBilingualSubtitles: (Boolean) -> Unit,
+    onSubtitleDownload: (String?) -> Unit,
+    onSpeed: (Float) -> Unit,
+    onSelectAudioTrack: (TrackChoice) -> Unit,
+    onSelectSourceLanguage: (String) -> Unit,
+    onSubtitleOff: () -> Unit,
+    onSubtitleSelect: (Int, Int) -> Unit,
+    onServer: (MediaSource) -> Unit,
+    onLock: () -> Unit,
+    onReport: () -> Unit,
+    onPip: () -> Unit,
+    onShare: () -> Unit,
+    onNextEpisode: () -> Unit,
+    onSelectEpisode: (EpisodeItem) -> Unit,
+) {
+    if (!isFullscreen) {
+        ControlsOverlay(
+            state = state,
+            position = position,
+            duration = duration,
+            isPlaying = isPlaying,
+            isFullscreen = false,
+            speed = speed,
+            panel = panel,
+            audioTracks = audioTracks,
+            subtitleTracks = subtitleTracks,
+            audioLabel = audioLabel,
+            fitToScreen = fitToScreen,
+            onBack = onBack,
+            onToggleFullscreen = onToggleFullscreen,
+            onTogglePlay = onTogglePlay,
+            onSeekTo = onSeekTo,
+            onPanel = onPanel,
+            onToggleFit = onToggleFit,
+            onSpeed = onSpeed,
+            onSelectAudioTrack = onSelectAudioTrack,
+            onSelectSourceLanguage = onSelectSourceLanguage,
+            onSubtitleOff = onSubtitleOff,
+            onSubtitleSelect = onSubtitleSelect,
+            onServer = onServer,
+            onLock = onLock,
+            onPip = onPip,
+            onShare = onShare,
+            onNextEpisode = onNextEpisode,
+            onSelectEpisode = onSelectEpisode,
+            onReport = onReport,
+        )
+    } else {
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent),
+                    ),
+                )
+                .padding(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 28.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = null, tint = Color.White)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = state.title,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (state.subtitle.isNotEmpty()) {
+                        Text(
+                            text = state.subtitle,
+                            color = Color.White.copy(alpha = 0.72f),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                if (isFullscreen) {
+                    IconButton(onClick = onReport) {
+                        Icon(
+                            Icons.Outlined.HelpOutline,
+                            contentDescription = stringRes(R.string.report_problem),
+                            tint = Color.White,
+                        )
+                    }
+                    IconButton(onClick = { onPanel(PlayerPanel.SETTINGS) }) {
+                        Icon(
+                            Icons.Outlined.Settings,
+                            contentDescription = stringRes(R.string.player_settings),
+                            tint = if (panel == PlayerPanel.SETTINGS) PLAYER_GREEN else Color.White,
+                        )
+                    }
+                } else {
+                    IconButton(onClick = onToggleFullscreen) {
+                        Icon(
+                            Icons.Outlined.Fullscreen,
+                            contentDescription = stringRes(R.string.player_fullscreen),
+                            tint = Color.White,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (isFullscreen) {
+            Surface(
+                onClick = onLock,
+                color = Color.Black.copy(alpha = 0.38f),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 28.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Outlined.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Text(stringRes(R.string.player_lock_prompt), color = Color.White, fontSize = 12.sp)
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .padding(horizontal = if (isFullscreen) 58.dp else 24.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { onSeekTo((position - 10_000).coerceAtLeast(0L) / 1000) }) {
+                Icon(Icons.Outlined.Replay10, contentDescription = stringRes(R.string.player_back_10), tint = Color.White, modifier = Modifier.size(34.dp))
+            }
+            IconButton(onClick = onTogglePlay) {
+                Icon(
+                    if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    contentDescription = stringRes(if (isPlaying) R.string.action_pause else R.string.action_play),
+                    tint = Color.White,
+                    modifier = Modifier.size(50.dp),
+                )
+            }
+            IconButton(onClick = { onSeekTo((position + 10_000) / 1000) }) {
+                Icon(Icons.Outlined.Forward10, contentDescription = stringRes(R.string.player_forward_10), tint = Color.White, modifier = Modifier.size(34.dp))
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f)),
+                    ),
+                )
+                .padding(horizontal = if (isFullscreen) 34.dp else 14.dp, vertical = 6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(formatClock(position), color = Color.White, fontSize = 11.sp)
+                val maxSeconds = if (duration > 0L) duration / 1000L else 1L
+                Slider(
+                    value = (position / 1000f).coerceIn(0f, maxSeconds.toFloat()),
+                    onValueChange = { onSeekTo(it.toLong()) },
+                    valueRange = 0f..maxSeconds.toFloat(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = PLAYER_GREEN,
+                        activeTrackColor = PLAYER_GREEN,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.36f),
+                    ),
+                    modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                )
+                Text(if (duration > 0L) formatClock(duration) else "LIVE", color = Color.White, fontSize = 11.sp)
+            }
+            if (isFullscreen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                            contentDescription = stringRes(if (isPlaying) R.string.action_pause else R.string.action_play),
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                    LandscapeActionIcon(
+                        icon = Icons.Outlined.AspectRatio,
+                        description = stringRes(if (fitToScreen) R.string.player_fit else R.string.player_fill),
+                        selected = false,
+                        onClick = onToggleFit,
+                    )
+                    LandscapeActionIcon(
+                        icon = Icons.Outlined.Audiotrack,
+                        description = stringRes(R.string.chip_language),
+                        selected = panel == PlayerPanel.AUDIO,
+                        onClick = { onPanel(PlayerPanel.AUDIO) },
+                    )
+                    if (panel == PlayerPanel.AUDIO || panel == PlayerPanel.STYLE || panel == PlayerPanel.DELAY) {
+                        LandscapeActionIcon(
+                            icon = Icons.Outlined.TextFields,
+                            description = stringRes(R.string.player_subtitle_style),
+                            selected = panel == PlayerPanel.STYLE,
+                            onClick = { onPanel(PlayerPanel.STYLE) },
+                        )
+                        LandscapeActionIcon(
+                            icon = Icons.Outlined.Timer,
+                            description = stringRes(R.string.player_subtitle_delay),
+                            selected = panel == PlayerPanel.DELAY,
+                            onClick = { onPanel(PlayerPanel.DELAY) },
+                        )
+                    }
+                    LandscapeActionIcon(
+                        icon = Icons.Outlined.Speed,
+                        description = stringRes(R.string.chip_speed),
+                        value = stringRes(R.string.player_speed_value, speed.toString().trimEnd('0').trimEnd('.')),
+                        selected = panel == PlayerPanel.SPEED,
+                        onClick = { onPanel(PlayerPanel.SPEED) },
+                    )
+                    val quality = state.source?.quality?.let { "${it}p" } ?: stringRes(R.string.quality_auto)
+                    LandscapeActionIcon(
+                        icon = Icons.Outlined.HighQuality,
+                        description = stringRes(R.string.chip_quality),
+                        value = quality,
+                        selected = panel == PlayerPanel.QUALITY,
+                        onClick = { onPanel(PlayerPanel.QUALITY) },
+                    )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = panel == PlayerPanel.SETTINGS,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 58.dp, end = 16.dp),
+        ) {
+            Surface(
+                color = Color(0xF0222524),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.width(320.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringRes(R.string.player_auto_miniplayer_title), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        Text(stringRes(R.string.player_auto_miniplayer_description), color = Color.White.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 14.sp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked = autoMiniplayer,
+                        onCheckedChange = onAutoMiniplayerChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = PLAYER_GREEN,
+                            checkedBorderColor = PLAYER_GREEN,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = Color(0xFF55595B),
+                            uncheckedBorderColor = Color(0xFF55595B),
+                        ),
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = panel != null && panel != PlayerPanel.SETTINGS,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .fillMaxWidth(
+                    when (panel) {
+                        PlayerPanel.AUDIO -> 0.45f
+                        PlayerPanel.EPISODES -> 0.34f
+                        PlayerPanel.STYLE, PlayerPanel.DELAY -> 0.26f
+                        else -> 0.20f
+                    },
+                ),
+        ) {
+            Surface(
+                color = Color(0xD90B100F),
+                shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                when (panel) {
+                    PlayerPanel.AUDIO -> LandscapeAudioPanel(
+                        state = state,
+                        audioTracks = audioTracks,
+                        subtitleTracks = subtitleTracks,
+                        bilingual = bilingualSubtitles,
+                        downloadStatus = subtitleDownloadStatus,
+                        onSelectAudioTrack = onSelectAudioTrack,
+                        onSelectSourceLanguage = onSelectSourceLanguage,
+                        onSubtitleOff = onSubtitleOff,
+                        onSubtitleSelect = onSubtitleSelect,
+                        onBilingual = onBilingualSubtitles,
+                        onDownload = onSubtitleDownload,
+                    )
+                    PlayerPanel.SPEED -> LandscapeSpeedPanel(speed, onSpeed)
+                    PlayerPanel.QUALITY, PlayerPanel.SERVERS -> LandscapeQualityPanel(state, onServer)
+                    PlayerPanel.STYLE -> LandscapeStylePanel(subtitleSize, onSubtitleSize)
+                    PlayerPanel.DELAY -> LandscapeDelayPanel(subtitleDelayMs, onSubtitleDelay)
+                    PlayerPanel.EPISODES -> LandscapeEpisodePanel(state, onSelectEpisode)
+                    else -> Unit
+                }
+            }
+        }
+    }
+    }
+}
+
+private val PLAYER_GREEN = Color(0xFF25D08B)
+
+@Composable
+private fun LandscapeActionIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    value: String? = null,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(icon, contentDescription = description, tint = if (selected) PLAYER_GREEN else Color.White, modifier = Modifier.size(20.dp))
+        value?.let { Text(it, color = if (selected) PLAYER_GREEN else Color.White, fontSize = 12.sp, maxLines = 1) }
+    }
+}
+
+@Composable
+private fun LandscapeAudioPanel(
+    state: PlayerUiState,
+    audioTracks: List<TrackChoice>,
+    subtitleTracks: List<TrackChoice>,
+    bilingual: Boolean,
+    downloadStatus: SubtitleDownloadStatus,
+    onSelectAudioTrack: (TrackChoice) -> Unit,
+    onSelectSourceLanguage: (String) -> Unit,
+    onSubtitleOff: () -> Unit,
+    onSubtitleSelect: (Int, Int) -> Unit,
+    onBilingual: (Boolean) -> Unit,
+    onDownload: (String?) -> Unit,
+) {
+    Row(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 16.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            Text(stringRes(R.string.audio_tracks), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
+            audioTracks.forEach { track ->
+                LandscapeOptionRow(track.label(R.string.player_audio_track), track.selected) { onSelectAudioTrack(track) }
+            }
+            state.languages.distinct().forEach { language ->
+                val label = SourceSelection.languageLabel(language, false)
+                val selected = language.equals(state.languageKey, ignoreCase = true)
+                LandscapeOptionRow(label, selected) { onSelectSourceLanguage(language) }
+            }
+            if (audioTracks.isEmpty() && state.languages.isEmpty()) {
+                Text(stringRes(R.string.player_no_audio_tracks), color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
+            }
+        }
+        Spacer(Modifier.width(18.dp))
+        Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            Text(stringRes(R.string.player_no_subtitles), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
+            val bilingualTrack = subtitleTracks.firstOrNull { it.label?.contains("bilingual", ignoreCase = true) == true }
+            Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringRes(R.string.player_bilingual), color = if (bilingualTrack != null) Color.White else Color.White.copy(alpha = 0.45f), fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = bilingual && bilingualTrack != null,
+                    enabled = bilingualTrack != null,
+                    onCheckedChange = onBilingual,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = PLAYER_GREEN,
+                        checkedBorderColor = PLAYER_GREEN,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color(0xFF55595B),
+                        uncheckedBorderColor = Color(0xFF55595B),
+                    ),
+                )
+            }
+            if (bilingualTrack == null) {
+                Text(stringRes(R.string.player_bilingual_unavailable), color = Color.White.copy(alpha = 0.45f), fontSize = 10.sp, modifier = Modifier.padding(bottom = 5.dp))
+            }
+            LandscapeOptionRow(stringRes(R.string.subtitles_off), subtitleTracks.none { it.selected }, onSubtitleOff)
+            subtitleTracks.forEach { track ->
+                LandscapeOptionRow(track.label(R.string.player_subtitle_track), track.selected) {
+                    onSubtitleSelect(track.groupIndex, track.trackIndex)
+                }
+            }
+            val selectedTrack = subtitleTracks.firstOrNull { it.selected }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = selectedTrack?.languageCode != null) { onDownload(selectedTrack?.languageCode) }
+                    .padding(vertical = 13.dp, horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.ClosedCaption, contentDescription = null, tint = if (selectedTrack?.languageCode != null) PLAYER_GREEN else Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(9.dp))
+                Text(stringRes(R.string.player_subtitle_download), color = if (selectedTrack?.languageCode != null) Color.White else Color.White.copy(alpha = 0.42f), fontSize = 12.sp)
+            }
+            val statusText = when (downloadStatus) {
+                SubtitleDownloadStatus.IDLE -> null
+                SubtitleDownloadStatus.DOWNLOADING -> stringRes(R.string.player_subtitle_download_running)
+                SubtitleDownloadStatus.STARTED -> stringRes(R.string.player_subtitle_download_started)
+                SubtitleDownloadStatus.UNAVAILABLE -> stringRes(R.string.player_subtitle_download_failed)
+                SubtitleDownloadStatus.FAILED -> stringRes(R.string.player_subtitle_download_error)
+            }
+            statusText?.let { Text(it, color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeOptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = if (selected) PLAYER_GREEN else Color.White.copy(alpha = 0.82f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (selected) Icon(Icons.Outlined.Check, contentDescription = null, tint = PLAYER_GREEN, modifier = Modifier.size(17.dp))
+    }
+}
+
+@Composable
+private fun LandscapeSpeedPanel(current: Float, onSelect: (Float) -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 15.dp), verticalArrangement = Arrangement.Center) {
+        listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { speed ->
+            LandscapeOptionRow("${speed}×", current == speed) { onSelect(speed) }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeQualityPanel(state: PlayerUiState, onServer: (MediaSource) -> Unit) {
+    val sources = (listOfNotNull(state.source) + state.alternatives).distinctBy { it.mediaUrl }
+        .sortedByDescending { it.quality ?: 0 }
+        .distinctBy { it.quality }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 15.dp), verticalArrangement = Arrangement.Center) {
+        sources.forEach { source ->
+            val label = source.quality?.let { "${it}p" } ?: stringRes(R.string.quality_auto)
+            LandscapeOptionRow(label, source.mediaUrl == state.source?.mediaUrl) { onServer(source) }
+        }
+        if (sources.isEmpty()) Text(stringRes(R.string.quality_auto), color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun LandscapeStylePanel(current: String, onSelect: (String) -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.Center) {
+        Text(stringRes(R.string.player_subtitle_style), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 9.dp))
+        listOf("small" to R.string.text_size_small, "medium" to R.string.text_size_medium, "large" to R.string.text_size_large).forEach { (size, label) ->
+            LandscapeOptionRow(stringRes(label), current == size) { onSelect(size) }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeDelayPanel(current: Int, onSelect: (Int) -> Unit) {
+    var value by remember(current) { mutableFloatStateOf(current.toFloat()) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.Center) {
+        Text(stringRes(R.string.player_subtitle_delay), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        Text(stringRes(R.string.player_subtitle_delay_value, "%.1f".format(Locale.ROOT, value / 1000f)), color = PLAYER_GREEN, fontSize = 18.sp)
+        Spacer(Modifier.height(6.dp))
+        Slider(
+            value = value,
+            onValueChange = { value = it },
+            valueRange = 0f..5_000f,
+            steps = 9,
+            onValueChangeFinished = { onSelect(value.toInt()) },
+            colors = SliderDefaults.colors(
+                thumbColor = PLAYER_GREEN,
+                activeTrackColor = PLAYER_GREEN,
+                inactiveTrackColor = Color.White.copy(alpha = 0.36f),
+            ),
+        )
+        Text(stringRes(R.string.player_subtitle_delay_later), color = Color.White.copy(alpha = 0.62f), fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun LandscapeEpisodePanel(state: PlayerUiState, onSelect: (EpisodeItem) -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
+        state.episodes.forEach { episode ->
+            val label = episode.title.orEmpty().ifBlank {
+                "S${episode.seasonNumber} E${episode.episodeNumber}"
+            }
+            LandscapeOptionRow(label, episode.key == state.episode?.key) { onSelect(episode) }
+        }
     }
 }

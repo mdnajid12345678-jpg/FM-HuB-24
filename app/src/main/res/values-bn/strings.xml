@@ -170,6 +170,20 @@
     <string name="player_audio_streams">অন্য ভাষার স্ট্রিম</string>
     <string name="player_no_alternative_servers">অন্য কোনো সার্ভার নেই</string>
     <string name="player_settings">সেটিংস</string>
+    <string name="player_auto_miniplayer_title">অটো মিনিপ্লেয়ার</string>
+    <string name="player_auto_miniplayer_description">অ্যাপ ছাড়লে ভিডিও ছোট ভাসমান উইন্ডোতে চলতে থাকবে।</string>
+    <string name="player_subtitle_style">সাবটাইটেলের ধরন</string>
+    <string name="player_subtitle_delay">সাবটাইটেল বিলম্ব</string>
+    <string name="player_bilingual">দুই ভাষার সাবটাইটেল</string>
+    <string name="player_bilingual_unavailable">এই স্ট্রিমে দুই ভাষার সাবটাইটেল ট্র্যাক নেই।</string>
+    <string name="player_subtitle_download">সাবটাইটেল ডাউনলোড</string>
+    <string name="player_subtitle_download_running">সাবটাইটেল ডাউনলোড প্রস্তুত হচ্ছে…</string>
+    <string name="player_subtitle_download_started">সাবটাইটেল ডাউনলোড শুরু হয়েছে</string>
+    <string name="player_subtitle_download_failed">এই স্ট্রিমে ডাউনলোডযোগ্য সাবটাইটেল ট্র্যাক নেই।</string>
+    <string name="player_subtitle_download_error">সাবটাইটেল ডাউনলোড ব্যর্থ হয়েছে। সংযোগ দেখে আবার চেষ্টা করুন।</string>
+    <string name="player_subtitle_delay_value">%1$s সেকেন্ড</string>
+    <string name="player_subtitle_delay_ahead">সাবটাইটেল আগে দেখাবে</string>
+    <string name="player_subtitle_delay_later">সাবটাইটেল পরে দেখাবে</string>
 
     <!-- Downloads -->
     <string name="downloads_storage_used">ব্যবহৃত জায়গা: %1$s</string>

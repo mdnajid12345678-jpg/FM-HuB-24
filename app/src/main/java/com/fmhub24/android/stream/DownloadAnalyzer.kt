@@ -137,6 +137,59 @@ object DownloadAnalyzer {
         }
     }
 
+    /** Creates an offline request containing the selected HLS text language only. */
+    suspend fun buildSubtitleRequest(
+        context: Context,
+        id: String,
+        source: MediaSource,
+        headers: Map<String, String>,
+        language: String,
+    ): DownloadRequest? {
+        if (StreamEngine.mimeTypeFor(source) != "application/x-mpegURL") return null
+        val data = StreamEngine.encodeHeaders(headers)
+        return withContext(Dispatchers.Main.immediate) {
+            suspendCancellableCoroutine { continuation ->
+                val helper = DownloadHelper.forMediaItem(
+                    context,
+                    StreamEngine.mediaItem(source, id),
+                    StreamEngine.dataSourceFactory(headers),
+                )
+                continuation.invokeOnCancellation { helper.release() }
+                helper.prepare(object : DownloadHelper.Callback {
+                    override fun onPrepared(helper: DownloadHelper, isLive: Boolean) {
+                        try {
+                            if (helper.periodCount <= 0) {
+                                helper.release()
+                                if (continuation.isActive) continuation.resume(null)
+                                return
+                            }
+                            val parameters = DefaultTrackSelector.Parameters.DEFAULT.buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .setPreferredTextLanguages(language)
+                                .build()
+                            helper.clearTrackSelections(0)
+                            helper.replaceTrackSelections(0, parameters)
+                            val request = helper.getDownloadRequest(id, data)
+                                .takeIf { it.streamKeys.isNotEmpty() }
+                            helper.release()
+                            if (continuation.isActive) continuation.resume(request)
+                        } catch (error: Throwable) {
+                            helper.release()
+                            if (continuation.isActive) continuation.resumeWithException(error)
+                        }
+                    }
+
+                    override fun onPrepareError(helper: DownloadHelper, error: IOException) {
+                        helper.release()
+                        if (continuation.isActive) continuation.resumeWithException(error)
+                    }
+                })
+            }
+        }
+    }
+
     private fun readTracks(helper: DownloadHelper, isLive: Boolean): Analysis {
         if (helper.periodCount <= 0) return Analysis(emptyList(), emptyList(), isLive)
         val tracks: Tracks = helper.getTracks(0)

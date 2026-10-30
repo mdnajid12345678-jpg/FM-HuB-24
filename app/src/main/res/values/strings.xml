@@ -171,6 +171,20 @@
     <string name="player_audio_streams">Available language streams</string>
     <string name="player_no_alternative_servers">No alternative servers are available</string>
     <string name="player_settings">Settings</string>
+    <string name="player_auto_miniplayer_title">Auto Miniplayer</string>
+    <string name="player_auto_miniplayer_description">Keep video playing in a floating window when you leave the app.</string>
+    <string name="player_subtitle_style">Subtitle style</string>
+    <string name="player_subtitle_delay">Subtitle delay</string>
+    <string name="player_bilingual">Bilingual</string>
+    <string name="player_bilingual_unavailable">No bilingual subtitle track in this stream.</string>
+    <string name="player_subtitle_download">Download subtitles</string>
+    <string name="player_subtitle_download_running">Preparing subtitle download…</string>
+    <string name="player_subtitle_download_started">Subtitle download started</string>
+    <string name="player_subtitle_download_failed">This stream does not expose a downloadable subtitle track.</string>
+    <string name="player_subtitle_download_error">Subtitle download failed. Check the connection and try again.</string>
+    <string name="player_subtitle_delay_value">%1$s sec</string>
+    <string name="player_subtitle_delay_ahead">Subtitle appears earlier</string>
+    <string name="player_subtitle_delay_later">Subtitle appears later</string>
 
     <!-- Downloads -->
     <string name="downloads_storage_used">Storage used: %1$s</string>

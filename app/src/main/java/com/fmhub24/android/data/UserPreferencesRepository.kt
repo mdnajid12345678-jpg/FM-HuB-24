@@ -47,7 +47,10 @@ class UserPreferencesRepository @Inject constructor(
             preferredAudio = values[PREFERRED_AUDIO],
             simultaneousDownloads = values[SIMULTANEOUS] ?: DownloadDefaults.DEFAULT_SIMULTANEOUS,
             deleteAfterWatching = values[DELETE_AFTER_WATCHING] ?: false,
+            autoMiniplayer = values[AUTO_MINIPLAYER] ?: false,
+            bilingualSubtitles = values[BILINGUAL_SUBTITLES] ?: false,
             subtitleSize = values[SUBTITLE_SIZE] ?: SubtitleSizes.MEDIUM,
+            subtitleDelayMs = values[SUBTITLE_DELAY_MS] ?: 0,
             playbackSpeed = values[PLAYBACK_SPEED] ?: 1f,
             notificationRationaleShown = values[NOTIFICATION_RATIONALE] ?: false,
             appLanguageAsked = values[LANGUAGE] != null,
@@ -84,8 +87,20 @@ class UserPreferencesRepository @Inject constructor(
         preferences.edit { it[DELETE_AFTER_WATCHING] = enabled }
     }
 
+    suspend fun saveAutoMiniplayer(enabled: Boolean) {
+        preferences.edit { it[AUTO_MINIPLAYER] = enabled }
+    }
+
     suspend fun saveSubtitleSize(size: String) {
         preferences.edit { it[SUBTITLE_SIZE] = size }
+    }
+
+    suspend fun saveSubtitleDelay(delayMs: Int) {
+        preferences.edit { it[SUBTITLE_DELAY_MS] = delayMs.coerceIn(-5_000, 5_000) }
+    }
+
+    suspend fun saveBilingualSubtitles(enabled: Boolean) {
+        preferences.edit { it[BILINGUAL_SUBTITLES] = enabled }
     }
 
     suspend fun savePlaybackSpeed(speed: Float) {
@@ -104,7 +119,10 @@ class UserPreferencesRepository @Inject constructor(
         val PREFERRED_AUDIO = stringPreferencesKey("preferred_audio")
         val SIMULTANEOUS = intPreferencesKey("simultaneous_downloads")
         val DELETE_AFTER_WATCHING = booleanPreferencesKey("delete_after_watching")
+        val AUTO_MINIPLAYER = booleanPreferencesKey("auto_miniplayer")
+        val BILINGUAL_SUBTITLES = booleanPreferencesKey("bilingual_subtitles")
         val SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
+        val SUBTITLE_DELAY_MS = intPreferencesKey("subtitle_delay_ms")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
         val NOTIFICATION_RATIONALE = booleanPreferencesKey("notification_rationale_shown")
     }
@@ -119,7 +137,10 @@ data class UserSettings(
     val preferredAudio: String?,
     val simultaneousDownloads: Int,
     val deleteAfterWatching: Boolean,
+    val autoMiniplayer: Boolean,
+    val bilingualSubtitles: Boolean,
     val subtitleSize: String,
+    val subtitleDelayMs: Int,
     val playbackSpeed: Float,
     val notificationRationaleShown: Boolean,
     val appLanguageAsked: Boolean = languageTag != null,
