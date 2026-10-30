@@ -342,7 +342,7 @@ object DownloadEngine {
             else -> DownloadState.Phase.UNKNOWN
         },
         percent = if (contentLength > 0) {
-            getPercentDownloaded().coerceIn(0f, 1f)
+            (getPercentDownloaded() / 100f).coerceIn(0f, 1f)
         } else {
             0f
         },

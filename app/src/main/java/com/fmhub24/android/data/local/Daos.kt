@@ -124,6 +124,9 @@ interface DownloadsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: DownloadEntity)
 
+    @Query("UPDATE downloads SET title = :title WHERE id = :id")
+    suspend fun renameTitle(id: String, title: String)
+
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun delete(id: String)
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fmhub24.android.data.UserPreferencesRepository
+import com.fmhub24.android.data.model.CodecSupport
 import com.fmhub24.android.data.model.DataException
 import com.fmhub24.android.data.model.ContentType
 import com.fmhub24.android.data.model.EpisodeItem
@@ -41,6 +42,7 @@ data class PlayerUiState(
     val retriedAfterExpiry: Boolean = false,
     val resumePositionMs: Long = 0L,
     val resumeDurationMs: Long = 0L,
+    val episodes: List<EpisodeItem> = emptyList(),
     val nextEpisode: EpisodeItem? = null,
 ) {
     val isSeries: Boolean get() = episode != null
@@ -66,6 +68,8 @@ class PlayerViewModel @Inject constructor(
 
     private val state = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = state
+    private val attemptedSources = mutableSetOf<String>()
+    private var handlingPlaybackError = false
 
     private val reportMessage = MutableStateFlow<String?>(null)
     val reportResult: StateFlow<String?> = reportMessage
@@ -129,11 +133,45 @@ class PlayerViewModel @Inject constructor(
                 return@launch
             }
 
+            val cachedEpisodes = catalog.cachedEpisodes(contentId)
+            val episodes = if (cachedEpisodes.isNotEmpty()) {
+                cachedEpisodes
+            } else if (item.usesEpisodes) {
+                downloads.records()
+                    .filter { it.contentId == contentId && it.episodeKey != null }
+                    .mapNotNull { record ->
+                        val key = record.episodeKey ?: return@mapNotNull null
+                        val parts = key.split('|')
+                        val seasonNumber = record.seasonNumber
+                            ?: parts.getOrNull(1)?.toIntOrNull() ?: 0
+                        val episodeNumber = record.episodeNumber
+                            ?: parts.getOrNull(2)?.toIntOrNull() ?: 0
+                        val marker = "S${seasonNumber}E${episodeNumber}"
+                        val title = record.title.substringAfter(" · $marker", "")
+                            .removePrefix(" · ").takeIf { it.isNotBlank() }
+                        EpisodeItem(
+                            id = null,
+                            contentId = contentId,
+                            seasonNumber = seasonNumber,
+                            episodeNumber = episodeNumber,
+                            title = title,
+                            description = null,
+                            posterUrl = record.posterUrl,
+                            sortOrder = null,
+                        )
+                    }
+                    .distinctBy { it.key }
+                    .sortedWith(compareBy<EpisodeItem> { it.seasonNumber }.thenBy { it.episodeNumber })
+            } else emptyList()
+            val playlist = if (episode != null && episodes.none { it.key == episode.key }) {
+                (episodes + episode)
+                    .sortedWith(compareBy<EpisodeItem> { it.seasonNumber }.thenBy { it.episodeNumber })
+            } else episodes
             val history = watchState.historyFor(contentId, episode?.key)
-            val next = episode?.let { catalog.cachedEpisodes(contentId).firstOrNull { candidate ->
-                candidate.seasonNumber > episode.seasonNumber ||
-                    (candidate.seasonNumber == episode.seasonNumber &&
-                        candidate.episodeNumber > episode.episodeNumber)
+            val next = episode?.let { current -> playlist.firstOrNull { candidate ->
+                candidate.seasonNumber > current.seasonNumber ||
+                    (candidate.seasonNumber == current.seasonNumber &&
+                        candidate.episodeNumber > current.episodeNumber)
             } }
 
             try {
@@ -151,6 +189,7 @@ class PlayerViewModel @Inject constructor(
                         failure = null,
                         resumePositionMs = history?.positionMs ?: 0L,
                         resumeDurationMs = history?.durationMs ?: 0L,
+                        episodes = playlist,
                         nextEpisode = next,
                         retriedAfterExpiry = false,
                     )
@@ -185,9 +224,12 @@ class PlayerViewModel @Inject constructor(
                     error = if (found.isEmpty()) DataException.Malformed("no source") else null,
                     resumePositionMs = history?.positionMs ?: 0L,
                     resumeDurationMs = history?.durationMs ?: 0L,
+                    episodes = playlist,
                     nextEpisode = next,
                     retriedAfterExpiry = false,
                 )
+                attemptedSources.clear()
+                chosen?.let { attemptedSources += sourceFamily(it) }
             } catch (failure: DataException) {
                 state.value = state.value.copy(
                     item = item,
@@ -196,6 +238,7 @@ class PlayerViewModel @Inject constructor(
                     error = failure,
                     resumePositionMs = history?.positionMs ?: 0L,
                     resumeDurationMs = history?.durationMs ?: 0L,
+                    episodes = playlist,
                     nextEpisode = next,
                 )
             } catch (failure: Exception) {
@@ -206,24 +249,81 @@ class PlayerViewModel @Inject constructor(
                     error = DataException.Malformed(failure.message ?: "source"),
                     resumePositionMs = history?.positionMs ?: 0L,
                     resumeDurationMs = history?.durationMs ?: 0L,
+                    episodes = playlist,
                     nextEpisode = next,
                 )
             }
         }
     }
 
-    /** A stream failure: read one fresh row and retry, otherwise show the failure screen (7). */
-    fun handlePlaybackError(error: com.fmhub24.android.stream.StreamError) {
+    /** Silently try other server/quality rows first; surface an error only when all fail. */
+    fun handlePlaybackError(
+        error: com.fmhub24.android.stream.StreamError,
+        positionMs: Long = 0L,
+        durationMs: Long = 0L,
+    ) {
         val current = state.value
-        if (current.retriedAfterExpiry ||
-            error != com.fmhub24.android.stream.StreamError.EXPIRED
-        ) {
+        val failedSource = current.source
+        if (failedSource == null || failedSource.status == "offline" || handlingPlaybackError) {
             state.value = current.copy(failure = error)
             return
         }
-        state.value = current.copy(retriedAfterExpiry = true, failure = null)
-        prepare(languageKey = current.languageKey, serverLabel = current.source?.serverLabel)
+        handlingPlaybackError = true
+        attemptedSources += sourceFamily(failedSource)
+        if (positionMs > 0L) recordProgress(positionMs, durationMs)
+        state.value = current.copy(
+            loading = true,
+            failure = null,
+            resumePositionMs = positionMs.coerceAtLeast(0L),
+            resumeDurationMs = durationMs.coerceAtLeast(0L),
+        )
+        viewModelScope.launch {
+            try {
+                val fresh = runCatching {
+                    sources.forTarget(current.item?.id ?: contentId, current.episode)
+                }.getOrDefault(emptyList())
+                val alternatives = SourceSelection.serverRows(
+                    fresh + current.alternatives,
+                    current.languageKey,
+                )
+                val supported = alternatives.filter { CodecSupport.isSupported(it.codec) }
+                val pool = (supported.ifEmpty { alternatives })
+                    .filterNot { sourceFamily(it) in attemptedSources }
+                val next = pool.sortedWith(
+                    compareBy<MediaSource> {
+                        when {
+                            it.serverLabel != failedSource.serverLabel -> 0
+                            it.quality != failedSource.quality -> 1
+                            else -> 2
+                        }
+                    }.thenByDescending { it.quality ?: 0 },
+                ).firstOrNull()
+                if (next == null) {
+                    state.value = state.value.copy(
+                        loading = false,
+                        failure = error,
+                        alternatives = alternatives,
+                    )
+                } else {
+                    attemptedSources += sourceFamily(next)
+                    state.value = state.value.copy(
+                        loading = false,
+                        failure = null,
+                        error = null,
+                        source = next,
+                        alternatives = alternatives,
+                        retriedAfterExpiry = current.retriedAfterExpiry ||
+                            error == com.fmhub24.android.stream.StreamError.EXPIRED,
+                    )
+                }
+            } finally {
+                handlingPlaybackError = false
+            }
+        }
     }
+
+    private fun sourceFamily(source: MediaSource): String =
+        "${source.serverLabel}|${source.quality}|${source.codec}|${source.language}"
 
     fun clearFailure() {
         state.value = state.value.copy(failure = null)
@@ -233,12 +333,59 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.savePlaybackSpeed(speed) }
     }
 
-    fun switchSource(serverLabel: String) {
-        prepare(languageKey = state.value.languageKey, serverLabel = serverLabel)
+    fun switchSource(source: MediaSource, positionMs: Long, durationMs: Long) {
+        attemptedSources.clear()
+        attemptedSources += sourceFamily(source)
+        if (positionMs > 0L) recordProgress(positionMs, durationMs)
+        state.value = state.value.copy(
+            source = source,
+            languageKey = SourceSelection.keyOf(source),
+            loading = false,
+            error = null,
+            failure = null,
+            resumePositionMs = positionMs.coerceAtLeast(0L),
+            resumeDurationMs = durationMs.coerceAtLeast(0L),
+        )
     }
 
-    fun switchLanguage(languageKey: String) {
-        prepare(languageKey = languageKey, serverLabel = null)
+    fun switchLanguage(languageKey: String, positionMs: Long, durationMs: Long) {
+        attemptedSources.clear()
+        val current = state.value
+        if (positionMs > 0L) recordProgress(positionMs, durationMs)
+        state.value = current.copy(
+            loading = true,
+            error = null,
+            failure = null,
+            resumePositionMs = positionMs.coerceAtLeast(0L),
+            resumeDurationMs = durationMs.coerceAtLeast(0L),
+        )
+        viewModelScope.launch {
+            try {
+                val found = sources.forTarget(current.item?.id ?: contentId, current.episode)
+                val pool = SourceSelection.forLanguage(found, languageKey)
+                val chosen = SourceSelection.auto(pool, languageKey) ?: pool.firstOrNull()
+                state.value = current.copy(
+                    loading = false,
+                    source = chosen,
+                    alternatives = SourceSelection.serverRows(found, languageKey),
+                    languages = SourceSelection.languages(found),
+                    languageKey = languageKey,
+                    error = if (chosen == null) DataException.Malformed("no source") else null,
+                    failure = null,
+                    resumePositionMs = positionMs.coerceAtLeast(0L),
+                    resumeDurationMs = durationMs.coerceAtLeast(0L),
+                )
+                chosen?.let { attemptedSources += sourceFamily(it) }
+            } catch (failure: Exception) {
+                state.value = current.copy(
+                    loading = false,
+                    error = if (failure is DataException) failure
+                    else DataException.Malformed(failure.message ?: "source"),
+                    resumePositionMs = positionMs.coerceAtLeast(0L),
+                    resumeDurationMs = durationMs.coerceAtLeast(0L),
+                )
+            }
+        }
     }
 
     fun recordProgress(positionMs: Long, durationMs: Long) {

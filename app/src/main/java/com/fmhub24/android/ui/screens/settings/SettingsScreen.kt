@@ -148,7 +148,7 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(6.dp))
             ThinProgress(
-                progress = if (used > 0) 0.35f else 0f,
+                progress = downloads.storageUsageFraction(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)

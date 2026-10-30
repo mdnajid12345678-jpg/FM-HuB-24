@@ -67,9 +67,9 @@ object Dest {
     const val DETAILS = "details/{contentId}"
     fun details(contentId: String) = "details/$contentId"
 
-    const val PLAYER = "player/{contentId}?episodeKey={episodeKey}"
-    fun player(contentId: String, episodeKey: String?) =
-        "player/$contentId?episodeKey=${episodeKey.orEmpty()}"
+    const val PLAYER = "player/{contentId}?episodeKey={episodeKey}&fullscreen={fullscreen}"
+    fun player(contentId: String, episodeKey: String?, fullscreen: Boolean = false) =
+        "player/$contentId?episodeKey=${episodeKey.orEmpty()}&fullscreen=$fullscreen"
 
     const val CHANNEL = "channel/{contentId}"
     fun channel(contentId: String) = "channel/$contentId"
@@ -200,6 +200,9 @@ fun FmHubApp(navController: NavHostController) {
             composable(Dest.DOWNLOADS) {
                 DownloadsScreen(
                     onOpenDetails = { id -> navController.navigate(Dest.details(id)) },
+                    onPlay = { id, episodeKey ->
+                        navController.navigate(Dest.player(id, episodeKey))
+                    },
                     onBrowse = { navController.navigate(Dest.EXPLORE) },
                 )
             }
@@ -248,15 +251,20 @@ fun FmHubApp(navController: NavHostController) {
                         type = NavType.StringType
                         defaultValue = ""
                     },
+                    navArgument("fullscreen") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
                 ),
             ) { entry ->
                 PlayerScreen(
                     contentId = entry.arguments?.getString("contentId").orEmpty(),
                     episodeKey = entry.arguments?.getString("episodeKey").orEmpty()
                         .takeIf { it.isNotEmpty() },
+                    initialFullscreen = entry.arguments?.getBoolean("fullscreen") ?: false,
                     onBack = { navController.popBackStack() },
-                    onOpenEpisode = { contentId, episodeKey ->
-                        navController.navigate(Dest.player(contentId, episodeKey)) {
+                    onOpenEpisode = { contentId, episodeKey, fullscreen ->
+                        navController.navigate(Dest.player(contentId, episodeKey, fullscreen)) {
                             popUpTo(Dest.PLAYER) { inclusive = true }
                         }
                     },

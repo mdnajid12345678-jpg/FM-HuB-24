@@ -29,12 +29,14 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,18 +72,31 @@ import com.fmhub24.android.stream.DownloadState
  * rows with pause, failed rows with retry, long-press selection mode with a confirming Delete.
  * There is deliberately no "Delete all".
  */
+private data class DeleteRequest(
+    val rows: List<DownloadRow>,
+    val contentId: String? = null,
+)
+
+private data class RenameRequest(
+    val contentId: String,
+    val downloadId: String?,
+    val title: String,
+    val isSeries: Boolean,
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DownloadsScreen(
     onOpenDetails: (String) -> Unit,
+    onPlay: (String, String?) -> Unit,
     onBrowse: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val rows by viewModel.rows.collectAsState()
     val sheet by viewModel.sheetState.collectAsState()
     var selection by remember { mutableStateOf(setOf<String>()) }
-    var menuFor by remember { mutableStateOf<DownloadRow?>(null) }
-    var confirmDelete by remember { mutableStateOf<DownloadRow?>(null) }
+    var confirmDelete by remember { mutableStateOf<DeleteRequest?>(null) }
+    var renameRequest by remember { mutableStateOf<RenameRequest?>(null) }
     var openGroup by remember { mutableStateOf<String?>(null) }
 
     if (openGroup != null) {
@@ -90,6 +105,7 @@ fun DownloadsScreen(
             onBack = { openGroup = null },
             viewModel = viewModel,
             onOpenDetails = onOpenDetails,
+            onPlay = onPlay,
         )
         return
     }
@@ -169,11 +185,20 @@ fun DownloadsScreen(
                         if (selection.isEmpty()) {
                             MovieRow(
                                 row = row,
-                                onOpen = { onOpenDetails(row.record.contentId) },
-                                onPause = { viewModel.setPaused(row.record.id, !it) },
+                                onOpen = { onPlay(row.record.contentId, null) },
+                                onPause = { viewModel.setPaused(row.record.id, true) },
+                                onResume = { viewModel.setPaused(row.record.id, false) },
                                 onRetry = { viewModel.retryRow(row) },
-                                onDelete = { confirmDelete = row },
-                                onMenu = { menuFor = row },
+                                onDelete = { confirmDelete = DeleteRequest(listOf(row)) },
+                                onDetails = { onOpenDetails(row.record.contentId) },
+                                onRename = {
+                                    renameRequest = RenameRequest(
+                                        contentId = row.record.contentId,
+                                        downloadId = row.record.id,
+                                        title = row.record.title,
+                                        isSeries = false,
+                                    )
+                                },
                                 onLongPress = { selection = setOf(row.record.id) },
                             )
                         } else {
@@ -186,15 +211,28 @@ fun DownloadsScreen(
 
                 groups.forEach { (contentId, groupRows) ->
                     val representative = groupRows.first()
-                    item(key = "group-$contentId") {                        if (selection.isEmpty()) {
+                    val firstEpisode = groupRows.minWithOrNull(
+                        compareBy<DownloadRow> { it.record.seasonNumber ?: Int.MAX_VALUE }
+                            .thenBy { it.record.episodeNumber ?: Int.MAX_VALUE },
+                    )
+                    item(key = "group-$contentId") {
+                        if (selection.isEmpty()) {
                             GroupRow(
                                 row = representative,
                                 episodeCount = groupRows.size,
                                 totalBytes = groupRows.sumOf { it.sizeBytes ?: 0L },
-                                onClick = { openGroup = contentId },
-                                onMenu = {
-                                    menuFor = groupRows.firstOrNull { it.record.episodeKey == null }
-                                        ?: representative
+                                onPlayFirst = {
+                                    firstEpisode?.record?.episodeKey?.let { onPlay(contentId, it) }
+                                },
+                                onOpenEpisodes = { openGroup = contentId },
+                                onDelete = { confirmDelete = DeleteRequest(groupRows, contentId) },
+                                onRename = {
+                                    renameRequest = RenameRequest(
+                                        contentId = contentId,
+                                        downloadId = null,
+                                        title = seriesTitle(representative.record.title),
+                                        isSeries = true,
+                                    )
                                 },
                                 onLongPress = {
                                     selection = groupRows.map { it.record.id }.toSet()
@@ -254,7 +292,9 @@ fun DownloadsScreen(
                     Spacer(Modifier.width(12.dp))
                     DangerButton(
                         text = stringRes(R.string.delete_with_size, formatBytes(totalSelected)),
-                        onClick = { selectedRows.firstOrNull()?.let { confirmDelete = it } },
+                        onClick = {
+                            if (selectedRows.isNotEmpty()) confirmDelete = DeleteRequest(selectedRows)
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -262,34 +302,33 @@ fun DownloadsScreen(
         }
     }
 
-    menuFor?.let { row ->
-        RowMenu(
-            isSeries = row.record.episodeKey != null,
-            onDismiss = { menuFor = null },
-            onPlay = {
-                menuFor = null
-                onOpenDetails(row.record.contentId)
-            },
-            onDetails = {
-                menuFor = null
-                onOpenDetails(row.record.contentId)
-            },
-            onDelete = {
-                confirmDelete = row
-                menuFor = null
-            },
-        )
-    }
-
-    confirmDelete?.let { row ->
+    confirmDelete?.let { request ->
         DeleteConfirmation(
-            size = row.sizeBytes,
+            size = request.rows.sumOf { it.sizeBytes ?: 0L },
+            count = request.rows.size,
+            isSeries = request.contentId != null,
             onConfirm = {
-                viewModel.remove(row.record.id)
-                selection = selection - row.record.id
+                if (request.contentId != null) {
+                    viewModel.removeGroup(request.contentId)
+                } else {
+                    request.rows.forEach { viewModel.remove(it.record.id) }
+                }
+                selection = selection - request.rows.map { it.record.id }.toSet()
                 confirmDelete = null
             },
             onDismiss = { confirmDelete = null },
+        )
+    }
+
+    renameRequest?.let { request ->
+        RenameDialog(
+            request = request,
+            onSave = { title ->
+                if (request.isSeries) viewModel.renameSeries(request.contentId, title)
+                else request.downloadId?.let { viewModel.renameDownload(it, title) }
+                renameRequest = null
+            },
+            onDismiss = { renameRequest = null },
         )
     }
 
@@ -297,7 +336,7 @@ fun DownloadsScreen(
         DownloadOptionsSheet(
             sheet = state,
             viewModel = viewModel,
-            onPlay = { id, _ -> onOpenDetails(id) },
+            onPlay = { id, key -> onPlay(id, key) },
         )
     }
 }
@@ -307,12 +346,23 @@ fun DownloadsScreen(
 private fun MovieRow(
     row: DownloadRow,
     onOpen: () -> Unit,
-    onPause: (Boolean) -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
-    onMenu: () -> Unit,
+    onDetails: () -> Unit,
+    onRename: () -> Unit,
     onLongPress: () -> Unit,
 ) {
+    var menuExpanded by remember(row.record.id) { mutableStateOf(false) }
+    val phase = row.state?.phase
+    val byteLabel = row.state?.let { live ->
+        if (live.bytesTotal > 0L) {
+            "${formatBytes(live.bytesDownloaded)} / ${formatBytes(live.bytesTotal)}"
+        } else {
+            formatBytes(live.bytesDownloaded)
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -346,33 +396,44 @@ private fun MovieRow(
                 text = listOfNotNull(
                     row.record.quality?.let { "${it}p" },
                     row.record.language,
-                    row.sizeBytes?.let { formatBytes(it) },
+                    byteLabel ?: row.sizeBytes?.let { formatBytes(it) },
                 ).joinToString(" · "),
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
-            if (row.state?.phase == DownloadState.Phase.DOWNLOADING) {
+            if (phase == DownloadState.Phase.DOWNLOADING ||
+                phase == DownloadState.Phase.PAUSED || phase == DownloadState.Phase.QUEUED
+            ) {
                 Spacer(Modifier.height(6.dp))
                 ThinProgress(progress = row.percent)
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = stringRes(
-                            R.string.download_in_progress,
-                            (row.percent * 100).toInt(),
-                        ),
+                        text = when (phase) {
+                            DownloadState.Phase.PAUSED -> stringRes(R.string.download_paused)
+                            DownloadState.Phase.QUEUED -> stringRes(R.string.download_queued)
+                            else -> stringRes(
+                                R.string.download_in_progress,
+                                (row.percent * 100).toInt(),
+                            )
+                        },
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(
-                        onClick = { onPause(true) },
+                        onClick = if (phase == DownloadState.Phase.PAUSED) onResume else onPause,
                         modifier = Modifier.size(28.dp),
                     ) {
                         Icon(
-                            Icons.Outlined.Pause,
-                            contentDescription = stringRes(R.string.action_pause),
+                            if (phase == DownloadState.Phase.PAUSED) {
+                                Icons.Outlined.PlayArrow
+                            } else Icons.Outlined.Pause,
+                            contentDescription = stringRes(
+                                if (phase == DownloadState.Phase.PAUSED) R.string.action_resume
+                                else R.string.action_pause,
+                            ),
                             modifier = Modifier.size(16.dp),
                         )
                     }
@@ -408,12 +469,32 @@ private fun MovieRow(
                 }
             }
         }
-        IconButton(onClick = onMenu) {
-            Icon(
-                Icons.Outlined.MoreVert,
-                contentDescription = stringRes(R.string.action_settings),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    Icons.Outlined.MoreVert,
+                    contentDescription = stringRes(R.string.action_settings),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_play)) },
+                    onClick = { menuExpanded = false; onOpen() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_details)) },
+                    onClick = { menuExpanded = false; onDetails() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_rename)) },
+                    onClick = { menuExpanded = false; onRename() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_delete)) },
+                    onClick = { menuExpanded = false; onDelete() },
+                )
+            }
         }
     }
 }
@@ -423,15 +504,18 @@ private fun GroupRow(
     row: DownloadRow,
     episodeCount: Int,
     totalBytes: Long,
-    onClick: () -> Unit,
-    onMenu: () -> Unit,
+    onPlayFirst: () -> Unit,
+    onOpenEpisodes: () -> Unit,
+    onDelete: () -> Unit,
+    onRename: () -> Unit,
     onLongPress: () -> Unit,
 ) {
+    var menuExpanded by remember(row.record.contentId) { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.width(84.dp)) {
+        Box(modifier = Modifier.width(84.dp).clickable(onClick = onPlayFirst)) {
             LandscapeThumb(
                 url = row.record.posterUrl,
                 contentDescription = row.record.title,
@@ -442,6 +526,7 @@ private fun GroupRow(
                 modifier = Modifier
                     .size(16.dp)
                     .align(Alignment.BottomEnd)
+                    .clickable(onClick = onOpenEpisodes)
                     .background(
                         MaterialTheme.colorScheme.surface,
                         RoundedCornerShape(4.dp),
@@ -453,10 +538,10 @@ private fun GroupRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .combinedClickable(onClick = onClick, onLongClick = onLongPress),
+                .combinedClickable(onClick = onPlayFirst, onLongClick = onLongPress),
         ) {
             Text(
-                text = row.record.title,
+                text = seriesTitle(row.record.title),
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -468,12 +553,32 @@ private fun GroupRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = onMenu) {
-            Icon(
-                Icons.Outlined.MoreVert,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    Icons.Outlined.MoreVert,
+                    contentDescription = stringRes(R.string.action_settings),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_play)) },
+                    onClick = { menuExpanded = false; onPlayFirst() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_open_episodes)) },
+                    onClick = { menuExpanded = false; onOpenEpisodes() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_rename)) },
+                    onClick = { menuExpanded = false; onRename() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringRes(R.string.menu_delete_series)) },
+                    onClick = { menuExpanded = false; onDelete() },
+                )
+            }
         }
     }
 }
@@ -525,44 +630,24 @@ private fun SelectableRow(
 }
 
 @Composable
-private fun RowMenu(
-    isSeries: Boolean,
+private fun DeleteConfirmation(
+    size: Long?,
+    count: Int = 1,
+    isSeries: Boolean = false,
+    onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    onPlay: () -> Unit,
-    onDetails: () -> Unit,
-    onDelete: () -> Unit,
 ) {
-    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text(stringRes(R.string.menu_play)) },
-            onClick = onPlay,
-        )
-        DropdownMenuItem(
-            text = { Text(stringRes(R.string.menu_details)) },
-            onClick = onDetails,
-        )
-        DropdownMenuItem(
-            text = { Text(stringRes(R.string.menu_delete)) },
-            onClick = onDelete,
-        )
-        if (isSeries) {
-            DropdownMenuItem(
-                text = { Text(stringRes(R.string.menu_delete_season)) },
-                onClick = onDelete,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DeleteConfirmation(size: Long?, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(stringRes(R.string.delete_confirm_title)) },
         text = {
             Text(
-                text = if (size != null) {
+                text = if (isSeries && size != null) {
+                    stringRes(R.string.delete_series_confirm_message, formatBytes(size))
+                } else if (count > 1 && size != null) {
+                    stringRes(R.string.delete_selected_confirm_message, count, formatBytes(size))
+                } else if (size != null) {
                     stringRes(R.string.delete_confirm_message, formatBytes(size))
                 } else {
                     stringRes(R.string.delete_confirm_generic)
@@ -582,6 +667,67 @@ private fun DeleteConfirmation(size: Long?, onConfirm: () -> Unit, onDismiss: ()
     )
 }
 
+@Composable
+private fun RenameDialog(
+    request: RenameRequest,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var title by remember(request.contentId, request.downloadId) {
+        mutableStateOf(request.title)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                stringRes(
+                    if (request.isSeries) R.string.rename_series_title
+                    else R.string.rename_download_title,
+                ),
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it.take(120) },
+                singleLine = true,
+                label = {
+                    Text(
+                        stringRes(
+                            if (request.isSeries) R.string.rename_series_hint
+                            else R.string.rename_download_hint,
+                        ),
+                    )
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(title.trim()) },
+                enabled = title.isNotBlank(),
+            ) {
+                Text(stringRes(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringRes(R.string.action_cancel))
+            }
+        },
+    )
+}
+
+private fun seriesTitle(title: String): String = title.substringBefore(" · S").trim()
+
+private fun episodeTitle(title: String, season: Int?, episode: Int?): String {
+    val marker = "S${season ?: 0}E${episode ?: 0}"
+    return title.substringAfter(" · $marker", "")
+        .removePrefix(" · ")
+        .trim()
+        .ifBlank { "Episode ${episode ?: ""}".trim() }
+}
+
 /** Series group detail: season chips and the episode list (spec 6.8). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -590,13 +736,13 @@ private fun GroupDetail(
     onBack: () -> Unit,
     viewModel: DownloadsViewModel,
     onOpenDetails: (String) -> Unit,
+    onPlay: (String, String?) -> Unit,
 ) {
     val rows by viewModel.rowsForGroup(contentId).collectAsState()
     var season by remember { mutableStateOf<Int?>(null) }
     val seasons = rows.mapNotNull { it.record.seasonNumber }.distinct().sorted()
     val current = season ?: seasons.firstOrNull()
     val visible = rows.filter { it.record.seasonNumber == current }
-    var menuRow by remember { mutableStateOf<DownloadRow?>(null) }
     var confirm by remember { mutableStateOf<DownloadRow?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -614,7 +760,7 @@ private fun GroupDetail(
                 )
             }
             Text(
-                text = rows.firstOrNull()?.record?.title ?: "",
+                text = rows.firstOrNull()?.record?.title?.let(::seriesTitle).orEmpty(),
                 fontSize = 17.sp,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f),
@@ -652,8 +798,11 @@ private fun GroupDetail(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(visible, key = { it.record.id }) { row ->
+                var menuExpanded by remember(row.record.id) { mutableStateOf(false) }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        onPlay(row.record.contentId, row.record.episodeKey)
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(modifier = Modifier.width(110.dp)) {
@@ -666,7 +815,11 @@ private fun GroupDetail(
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "${row.record.episodeNumber ?: ""} · ${row.record.title}",
+                            text = episodeTitle(
+                                row.record.title,
+                                row.record.seasonNumber,
+                                row.record.episodeNumber,
+                            ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
@@ -675,51 +828,77 @@ private fun GroupDetail(
                         Text(
                             text = listOfNotNull(
                                 row.record.quality?.let { "${it}p" },
-                                row.sizeBytes?.let { formatBytes(it) },
+                                row.state?.let { live ->
+                                    if (live.bytesTotal > 0L) {
+                                        "${formatBytes(live.bytesDownloaded)} / ${formatBytes(live.bytesTotal)}"
+                                    } else formatBytes(live.bytesDownloaded)
+                                } ?: row.sizeBytes?.let { formatBytes(it) },
                             ).joinToString(" · "),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (row.isFinished) {
-                        Icon(
+                    when (row.state?.phase) {
+                        DownloadState.Phase.COMPLETED -> Icon(
                             Icons.Outlined.DownloadDone,
-                            contentDescription = null,
+                            contentDescription = stringRes(R.string.download_completed),
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
-                    } else if (row.isInProgress) {
-                        InlineSpinner(size = 16.dp)
+                        DownloadState.Phase.PAUSED -> IconButton(
+                            onClick = { viewModel.setPaused(row.record.id, false) },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(Icons.Outlined.PlayArrow, contentDescription = stringRes(R.string.action_resume))
+                        }
+                        DownloadState.Phase.DOWNLOADING, DownloadState.Phase.QUEUED -> IconButton(
+                            onClick = { viewModel.setPaused(row.record.id, true) },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(Icons.Outlined.Pause, contentDescription = stringRes(R.string.action_pause))
+                        }
+                        DownloadState.Phase.FAILED -> TextButton(
+                            onClick = { viewModel.retryRow(row) },
+                        ) {
+                            Text(stringRes(R.string.download_retry), fontSize = 11.sp)
+                        }
+                        else -> Unit
                     }
-                    IconButton(onClick = { menuRow = row }) {
-                        Icon(
-                            Icons.Outlined.MoreVert,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                Icons.Outlined.MoreVert,
+                                contentDescription = stringRes(R.string.action_settings),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringRes(R.string.menu_play)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onPlay(row.record.contentId, row.record.episodeKey)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringRes(R.string.menu_details)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenDetails(row.record.contentId)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringRes(R.string.menu_delete)) },
+                                onClick = { menuExpanded = false; confirm = row },
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-
-    menuRow?.let { row ->
-        RowMenu(
-            isSeries = true,
-            onDismiss = { menuRow = null },
-            onPlay = {
-                menuRow = null
-                onOpenDetails(row.record.contentId)
-            },
-            onDetails = {
-                menuRow = null
-                onOpenDetails(row.record.contentId)
-            },
-            onDelete = {
-                confirm = row
-                menuRow = null
-            },
-        )
     }
 
     confirm?.let { row ->

@@ -324,7 +324,22 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch { repository.removeTarget(contentId, null) }
     }
 
+    fun renameDownload(id: String, title: String) {
+        viewModelScope.launch { repository.rename(id, title) }
+    }
+
+    fun renameSeries(contentId: String, title: String) {
+        viewModelScope.launch { repository.renameSeries(contentId, title) }
+    }
+
     fun freeSpaceBytes(): Long = repository.freeSpaceBytes()
+
+    fun storageUsageFraction(): Float {
+        val total = repository.totalSpaceBytes()
+        if (total <= 0L) return 0f
+        return ((total - repository.freeSpaceBytes()).coerceAtLeast(0L).toFloat() / total)
+            .coerceIn(0f, 1f)
+    }
 
     /** Failed rows retry through the sheet, because a fresh signed link is required (spec 5.2). */
     fun retryRow(row: DownloadRow) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,15 +30,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Forward10
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Pause
@@ -71,6 +76,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,6 +92,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.fmhub24.android.R
 import com.fmhub24.android.data.model.CodecSupport
+import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaSource
 import com.fmhub24.android.data.repo.SourceSelection
 import com.fmhub24.android.ui.FmHubLoader
@@ -106,19 +115,42 @@ fun PlayerScreen(
     contentId: String,
     episodeKey: String?,
     onBack: () -> Unit,
-    onOpenEpisode: (String, String?) -> Unit,
+    onOpenEpisode: (String, String?, Boolean) -> Unit,
+    initialFullscreen: Boolean = false,
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val savedPlaybackSpeed by viewModel.playbackSpeed.collectAsState(initial = 1f)
     val activity = LocalContext.current.findActivity()
 
-    DisposableEffect(Unit) {
-        val previous = activity?.requestedOrientation
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    var fullscreen by remember(contentId) { mutableStateOf(initialFullscreen) }
+
+    DisposableEffect(activity) {
+        val window = activity?.window
         onDispose {
-            activity?.requestedOrientation =
-                previous ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            window?.let {
+                WindowCompat.getInsetsController(it, it.decorView)
+                    .show(WindowInsetsCompat.Type.systemBars())
+            }
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    LaunchedEffect(activity, fullscreen) {
+        activity?.requestedOrientation = if (fullscreen) {
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        activity?.window?.let { window ->
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            if (fullscreen) {
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 
@@ -127,7 +159,7 @@ fun PlayerScreen(
     val background = Color(0xFF05052B)
 
     when {
-        state.loading -> Box(
+        state.loading && state.source == null -> Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(background),
@@ -153,6 +185,8 @@ fun PlayerScreen(
             state = state,
             viewModel = viewModel,
             savedPlaybackSpeed = savedPlaybackSpeed,
+            isFullscreen = fullscreen,
+            onToggleFullscreen = { fullscreen = !fullscreen },
             onBack = onBack,
             onOpenEpisode = onOpenEpisode,
         )
@@ -177,8 +211,10 @@ private fun PlayerContent(
     state: PlayerUiState,
     viewModel: PlayerViewModel,
     savedPlaybackSpeed: Float,
+    isFullscreen: Boolean,
+    onToggleFullscreen: () -> Unit,
     onBack: () -> Unit,
-    onOpenEpisode: (String, String?) -> Unit,
+    onOpenEpisode: (String, String?, Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -203,7 +239,11 @@ private fun PlayerContent(
         window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                viewModel.handlePlaybackError(StreamEngine.classify(error))
+                viewModel.handlePlaybackError(
+                    StreamEngine.classify(error),
+                    positionMs = player.currentPosition,
+                    durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+                )
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -211,7 +251,7 @@ private fun PlayerContent(
                     val finalDuration = player.duration
                     if (finalDuration > 0L) viewModel.onPlaybackCompleted(finalDuration)
                     state.nextEpisode?.let { next ->
-                        onOpenEpisode(state.item?.id.orEmpty(), next.key)
+                        onOpenEpisode(state.item?.id.orEmpty(), next.key, isFullscreen)
                     }
                 }
             }
@@ -240,6 +280,8 @@ private fun PlayerContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    var resumeAsked by remember { mutableStateOf(state.resumePositionMs < 5_000L) }
+    var startAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(player, source.mediaUrl) {
         player.setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
         player.setMediaItem(
@@ -248,6 +290,9 @@ private fun PlayerContent(
                 .setMimeType(StreamEngine.mimeTypeFor(source))
                 .build(),
         )
+        if (resumeAsked && state.resumePositionMs > 5_000L) {
+            player.seekTo(state.resumePositionMs)
+        }
         player.playWhenReady = true
         player.prepare()
     }
@@ -289,8 +334,6 @@ private fun PlayerContent(
         }
     }
 
-    var resumeAsked by remember { mutableStateOf(state.resumePositionMs < 5_000L) }
-    var startAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(startAt) {
         if (startAt > 0L) player.seekTo(startAt)
     }
@@ -324,9 +367,10 @@ private fun PlayerContent(
     val volumeLabel = stringRes(R.string.player_volume)
     val reportLabel = stringRes(R.string.report_problem)
 
+    Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = (if (isFullscreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
+            .aspectRatio(16f / 9f))
             .background(Color.Black)
             .pointerInput(locked) {
                 detectTapGestures(
@@ -402,7 +446,7 @@ private fun PlayerContent(
             }
         }
 
-        if (isBuffering) {
+        if (isBuffering || state.loading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 FmHubLoader(Modifier.size(40.dp))
             }
@@ -454,21 +498,18 @@ private fun PlayerContent(
             }
         }
 
-        AnimatedVisibility(
-            visible = showControls || !isPlaying,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        if (showControls || !isPlaying) {
             ControlsOverlay(
                 state = state,
                 position = position,
                 duration = duration,
                 isPlaying = isPlaying,
+                isFullscreen = isFullscreen,
                 speed = speed,
                 panel = panel,
                 tracks = tracks,
                 onBack = onBack,
+                onToggleFullscreen = onToggleFullscreen,
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     showControls = true
@@ -503,11 +544,11 @@ private fun PlayerContent(
                         .build()
                 },
                 onLanguage = { language ->
-                    viewModel.switchLanguage(language)
+                    viewModel.switchLanguage(language, position, duration)
                     panel = null
                 },
                 onServer = { server ->
-                    viewModel.switchSource(server)
+                    viewModel.switchSource(server, position, duration)
                     panel = null
                 },
                 onLock = {
@@ -525,8 +566,12 @@ private fun PlayerContent(
                 onNextEpisode = {
                     state.nextEpisode?.let { next ->
                         viewModel.recordProgress(position, duration)
-                        onOpenEpisode(state.item?.id.orEmpty(), next.key)
+                        onOpenEpisode(state.item?.id.orEmpty(), next.key, isFullscreen)
                     }
+                },
+                onSelectEpisode = { selected ->
+                    viewModel.recordProgress(position, duration)
+                    onOpenEpisode(state.item?.id.orEmpty(), selected.key, isFullscreen)
                 },
                 onReport = { reportOpen = true },
                 reportLabel = reportLabel,
@@ -534,7 +579,10 @@ private fun PlayerContent(
         }
 
         if (locked) {
-            LockedOverlay(onUnlock = { locked = false })
+            LockedOverlay(onUnlock = {
+                locked = false
+                showControls = true
+            })
         }
 
         if (!resumeAsked && state.resumePositionMs > 5_000L && duration > 0L) {
@@ -561,6 +609,17 @@ private fun PlayerContent(
             )
         }
     }
+    if (!isFullscreen && state.isSeries) {
+        EpisodePlaylist(
+            state = state,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            onSelect = { selected ->
+                viewModel.recordProgress(position, duration)
+                onOpenEpisode(state.item?.id.orEmpty(), selected.key, false)
+            },
+        )
+    }
+    }
 }
 
 @Composable
@@ -569,10 +628,12 @@ private fun ControlsOverlay(
     position: Long,
     duration: Long,
     isPlaying: Boolean,
+    isFullscreen: Boolean,
     speed: Float,
     panel: PlayerPanel?,
     tracks: Tracks,
     onBack: () -> Unit,
+    onToggleFullscreen: () -> Unit,
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onPanel: (PlayerPanel) -> Unit,
@@ -580,11 +641,12 @@ private fun ControlsOverlay(
     onSubtitleOff: () -> Unit,
     onSubtitleSelect: (Int, Int) -> Unit,
     onLanguage: (String) -> Unit,
-    onServer: (String) -> Unit,
+    onServer: (MediaSource) -> Unit,
     onLock: () -> Unit,
     onPip: () -> Unit,
     onShare: () -> Unit,
     onNextEpisode: () -> Unit,
+    onSelectEpisode: (EpisodeItem) -> Unit,
     onReport: () -> Unit,
     reportLabel: String = "",
 ) {
@@ -636,6 +698,16 @@ private fun ControlsOverlay(
                 Icon(
                     Icons.Outlined.PictureInPictureAlt,
                     contentDescription = null,
+                    tint = Color.White,
+                )
+            }
+            IconButton(onClick = onToggleFullscreen) {
+                Icon(
+                    if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                    contentDescription = stringRes(
+                        if (isFullscreen) R.string.player_exit_fullscreen
+                        else R.string.player_fullscreen,
+                    ),
                     tint = Color.White,
                 )
             }
@@ -767,7 +839,7 @@ private fun ControlsOverlay(
                         onServer = onServer,
                         onReport = onReport,
                     )
-                    else -> EpisodePanel(state = state, onNextEpisode = onNextEpisode)
+                    else -> EpisodePanel(state = state, onSelectEpisode = onSelectEpisode)
                 }
             }
         }
@@ -796,7 +868,7 @@ private fun PlayerChip(text: String, onClick: () -> Unit, active: Boolean) {
 private fun LanguageServerPanel(
     state: PlayerUiState,
     onLanguage: (String) -> Unit,
-    onServer: (String) -> Unit,
+    onServer: (MediaSource) -> Unit,
     onReport: () -> Unit,
 ) {
     // Design `.pn`: three tabs (Language / Server / Quality) above the list, rows on the
@@ -828,7 +900,7 @@ private fun LanguageServerPanel(
                     color = Color.White.copy(alpha = 0.45f),
                 )
                 Spacer(Modifier.height(6.dp))
-                state.languages.take(4).forEach { language ->
+                state.languages.take(8).forEach { language ->
                     PanelRow(
                         label = SourceSelection.languageLabel(language, false),
                         trailing = null,
@@ -848,9 +920,9 @@ private fun LanguageServerPanel(
                         ).joinToString(" · "),
                         trailing = if (supported) null
                         else stringRes(R.string.unsupported_on_phone),
-                        selected = server.serverLabel == state.source?.serverLabel,
+                        selected = server.mediaUrl == state.source?.mediaUrl,
                         supported = supported,
-                        onClick = { onServer(server.serverLabel) },
+                        onClick = { onServer(server) },
                     )
                 }
             }
@@ -865,9 +937,9 @@ private fun LanguageServerPanel(
                             label = quality,
                             trailing = if (supported) null
                             else stringRes(R.string.unsupported_on_phone),
-                            selected = servers.any { it.serverLabel == state.source?.serverLabel },
+                            selected = servers.any { it.mediaUrl == state.source?.mediaUrl },
                             supported = supported,
-                            onClick = { onServer(target.serverLabel) },
+                            onClick = { onServer(target) },
                         )
                     }
             }
@@ -1005,31 +1077,100 @@ private fun SubtitlesPanel(
 }
 
 @Composable
-private fun EpisodePanel(state: PlayerUiState, onNextEpisode: () -> Unit) {
-    Column(modifier = Modifier.padding(14.dp)) {
+private fun EpisodePlaylist(
+    state: PlayerUiState,
+    modifier: Modifier = Modifier,
+    onSelect: (EpisodeItem) -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .background(Color(0xFF05052B))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
         Text(
-            text = stringRes(R.string.chip_episodes),
+            text = stringRes(R.string.player_episode_playlist),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+        )
+        Spacer(Modifier.height(6.dp))
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(state.episodes, key = { it.key }) { episode ->
+                EpisodeQueueItem(
+                    episode = episode,
+                    current = episode.key == state.episode?.key,
+                    onClick = { onSelect(episode) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpisodePanel(
+    state: PlayerUiState,
+    onSelectEpisode: (EpisodeItem) -> Unit,
+) {
+    Column(modifier = Modifier.padding(12.dp)) {
+        Text(
+            text = stringRes(R.string.player_episode_playlist),
             fontSize = 12.sp,
             color = Color.White.copy(alpha = 0.7f),
         )
         Spacer(Modifier.height(8.dp))
-        if (state.subtitle.isNotEmpty()) {
-            Text(text = state.subtitle, fontSize = 15.sp, color = Color.White)
-        }
-        Spacer(Modifier.height(10.dp))
-        state.nextEpisode?.let { next ->
-            Surface(
-                onClick = onNextEpisode,
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Text(
-                    text = stringRes(R.string.player_next_episode),
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+            items(state.episodes, key = { it.key }) { episode ->
+                EpisodeQueueItem(
+                    episode = episode,
+                    current = episode.key == state.episode?.key,
+                    onClick = { onSelectEpisode(episode) },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun EpisodeQueueItem(
+    episode: EpisodeItem,
+    current: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (current) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                else Color.Transparent,
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "${episode.episodeNumber}",
+            color = if (current) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+            fontSize = 12.sp,
+            modifier = Modifier.width(28.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = episode.title?.takeIf { it.isNotBlank() }
+                    ?: "Episode ${episode.episodeNumber}",
+                color = Color.White,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "S${episode.seasonNumber} · E${episode.episodeNumber}",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+            )
+        }
+        if (current) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null, tint = Color.White)
         }
     }
 }
@@ -1045,9 +1186,7 @@ private fun LockedOverlay(onUnlock: () -> Unit) {
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .padding(start = 16.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures(onLongPress = { onUnlock() })
-                },
+                .clickable(onClick = onUnlock),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1061,7 +1200,7 @@ private fun LockedOverlay(onUnlock: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = stringRes(R.string.player_locked),
+                    text = stringRes(R.string.player_unlock),
                     color = Color.White.copy(alpha = 0.85f),
                     fontSize = 10.sp,
                     textAlign = TextAlign.Center,
@@ -1110,7 +1249,13 @@ private fun FailureOverlay(
                 StreamError.FAILED -> stringRes(R.string.playback_failed)
             },
             alternatives = state.alternatives,
-            onTry = { server -> viewModel.switchSource(server) },
+            onTry = { source ->
+                viewModel.switchSource(
+                    source,
+                    state.resumePositionMs,
+                    state.resumeDurationMs,
+                )
+            },
             onReport = { viewModel.sendReport(reportLabel) },
             reportLabel = reportLabel,
             onBack = onBack,
@@ -1123,7 +1268,7 @@ private fun FailureContent(
     background: Color,
     message: String,
     alternatives: List<MediaSource>,
-    onTry: ((String) -> Unit)?,
+    onTry: ((MediaSource) -> Unit)?,
     onReport: (() -> Unit)?,
     onBack: () -> Unit,
     reportLabel: String = "",
@@ -1161,7 +1306,7 @@ private fun FailureContent(
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(alternatives) { server ->
                     Surface(
-                        onClick = { onTry(server.serverLabel) },
+                        onClick = { onTry(server) },
                         color = Color.White.copy(alpha = 0.14f),
                         shape = RoundedCornerShape(8.dp),
                     ) {
@@ -1176,7 +1321,7 @@ private fun FailureContent(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            TextButton(onClick = { onTry(alternatives.first().serverLabel) }) {
+            TextButton(onClick = { onTry(alternatives.first()) }) {
                 Text(
                     text = stringRes(R.string.try_now),
                     color = Color(0xFF3EA6FF),

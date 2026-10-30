@@ -37,7 +37,9 @@ data class DownloadRow(
     val percent: Float
         get() = state?.percent ?: 0f
     val sizeBytes: Long?
-        get() = state?.bytesTotal?.takeIf { it > 0 } ?: record.sizeBytes
+        get() = state?.bytesDownloaded ?: record.sizeBytes
+    val totalBytes: Long?
+        get() = state?.bytesTotal?.takeIf { it > 0L }
     /** For series grouping in the Downloads tab. */
     val groupKey: String get() = record.contentId
 }
@@ -78,6 +80,22 @@ class DownloadsRepository @Inject constructor(
         }
 
     suspend fun recordWithId(id: String): DownloadEntity? = dao.byId(id)
+
+    suspend fun rename(id: String, title: String) {
+        val normalized = title.trim().take(120)
+        if (normalized.isNotEmpty()) dao.renameTitle(id, normalized)
+    }
+
+    suspend fun renameSeries(contentId: String, title: String) {
+        val normalized = title.trim().take(120)
+        if (normalized.isEmpty()) return
+        val rows = dao.all().filter { it.contentId == contentId && it.episodeKey != null }
+        val suffixPattern = Regex("^.*? · (S\\d+E\\d+(?: · .*)?)$")
+        rows.forEach { row ->
+            val suffix = suffixPattern.matchEntire(row.title)?.groupValues?.get(1)
+            dao.renameTitle(row.id, if (suffix == null) normalized else "$normalized · $suffix")
+        }
+    }
 
     suspend fun offlineSource(contentId: String, episodeKey: String?): MediaSource? =
         withContext(Dispatchers.IO) {
@@ -197,6 +215,10 @@ class DownloadsRepository @Inject constructor(
     fun freeSpaceBytes(): Long = runCatching {
         val stat = StatFs(context.filesDir.absolutePath)
         stat.availableBlocksLong * stat.blockSizeLong
+    }.getOrDefault(0L)
+
+    fun totalSpaceBytes(): Long = runCatching {
+        StatFs(context.filesDir.absolutePath).totalBytes
     }.getOrDefault(0L)
 
     fun isDeletingAllowed(contentType: ContentType): Boolean = true
