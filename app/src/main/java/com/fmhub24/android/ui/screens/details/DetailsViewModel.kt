@@ -4,11 +4,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fmhub24.android.data.model.DataException
+import com.fmhub24.android.data.model.ContentType
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.MediaSource
 import com.fmhub24.android.data.model.SeasonItem
 import com.fmhub24.android.data.repo.CatalogRepository
+import com.fmhub24.android.data.repo.DownloadsRepository
 import com.fmhub24.android.data.repo.SourcesRepository
 import com.fmhub24.android.data.repo.SourceSelection
 import com.fmhub24.android.data.repo.WatchStateRepository
@@ -33,6 +35,7 @@ data class DetailsUiState(
     val selectedSeason: Int? = null,
     val inMyList: Boolean = false,
     val history: HistoryEntry? = null,
+    val offlineOnly: Boolean = false,
 )
 
 /** Fresh, resolved sources plus the chosen language/server (never cached). */
@@ -51,6 +54,7 @@ class DetailsViewModel @Inject constructor(
     private val catalog: CatalogRepository,
     private val sources: SourcesRepository,
     private val watchState: WatchStateRepository,
+    private val downloads: DownloadsRepository,
 ) : ViewModel() {
     val contentId: String = savedState.get<String>("contentId").orEmpty()
 
@@ -93,36 +97,113 @@ class DetailsViewModel @Inject constructor(
         viewModelScope.launch {
             base.value = base.value.copy(loading = true, error = null)
 
+            val localRows = downloads.records().filter { it.contentId == contentId }
             val cached = catalog.cachedContent(contentId)
+            val localEpisodes = downloadedEpisodes(localRows)
+            val localSeasons = localRows.mapNotNull { it.seasonNumber }.distinct().sorted()
+                .map { number -> SeasonItem(contentId, number, null, number) }
+            if (cached == null && localRows.isNotEmpty()) {
+                val record = localRows.first()
+                val offlineItem = MediaItem(
+                    id = contentId,
+                    canonicalKey = null,
+                    title = record.title.substringBefore(" · S").trim(),
+                    originalTitle = null,
+                    contentType = ContentType.from(record.contentType),
+                    releaseYear = null,
+                    posterUrl = record.posterUrl,
+                    description = null,
+                    genres = emptyList(),
+                    status = null,
+                    rating = null,
+                    createdAt = null,
+                    updatedAt = null,
+                )
+                base.value = base.value.copy(
+                    item = offlineItem,
+                    loading = false,
+                    error = null,
+                    seasons = localSeasons,
+                    episodes = localEpisodes,
+                    offlineOnly = true,
+                )
+                return@launch
+            }
             base.value = base.value.copy(item = cached)
 
             val contentError = catalog.ensureContent(contentId)
             base.value = base.value.copy(item = catalog.cachedContent(contentId))
 
             var failure = contentError
+            var structureError: DataException? = null
             if (failure == null) {
                 val isSeries = base.value.item?.usesEpisodes == true
-                val structureError = catalog.ensureStructure(contentId)
+                structureError = catalog.ensureStructure(contentId)
                 failure = structureError
+                val catalogEpisodes = catalog.cachedEpisodes(contentId)
+                val episodes = if (structureError != null && localEpisodes.isNotEmpty()) {
+                    localEpisodes
+                } else {
+                    (catalogEpisodes + localEpisodes).distinctBy { it.key }
+                }
+                val seasons = (catalog.cachedSeasons(contentId) + localSeasons)
+                    .distinctBy { it.seasonNumber }
+                    .sortedBy { it.seasonNumber }
                 base.value = base.value.copy(
-                    seasons = catalog.cachedSeasons(contentId),
-                    episodes = catalog.cachedEpisodes(contentId),
+                    seasons = seasons,
+                    episodes = episodes,
                 )
                 if (structureError == null && isSeries &&
-                    base.value.seasons.isEmpty() && base.value.episodes.isEmpty()
+                    seasons.isEmpty() && episodes.isEmpty()
                 ) {
                     catalog.reloadStructure(contentId)
+                    val refreshedEpisodes = catalog.cachedEpisodes(contentId)
                     base.value = base.value.copy(
-                        seasons = catalog.cachedSeasons(contentId),
-                        episodes = catalog.cachedEpisodes(contentId),
+                        seasons = (catalog.cachedSeasons(contentId) + localSeasons)
+                            .distinctBy { it.seasonNumber }
+                            .sortedBy { it.seasonNumber },
+                        episodes = (refreshedEpisodes + localEpisodes).distinctBy { it.key },
                     )
                 }
+            } else if (localEpisodes.isNotEmpty()) {
+                structureError = contentError
+                base.value = base.value.copy(
+                    seasons = localSeasons,
+                    episodes = localEpisodes,
+                )
             }
 
-            base.value = base.value.copy(loading = false, error = failure)
-            if (base.value.item?.usesEpisodes != true) loadSources()
+            val offlineOnly = localRows.isNotEmpty() && (contentError != null || structureError != null)
+            base.value = base.value.copy(
+                loading = false,
+                error = failure,
+                offlineOnly = offlineOnly,
+            )
+            if (base.value.item?.usesEpisodes != true && !offlineOnly) loadSources()
         }
     }
+
+    private fun downloadedEpisodes(rows: List<com.fmhub24.android.data.local.DownloadEntity>): List<EpisodeItem> =
+        rows.mapNotNull { row ->
+            val parts = row.episodeKey?.split('|').orEmpty()
+            val seasonNumber = row.seasonNumber ?: parts.getOrNull(1)?.toIntOrNull()
+                ?: return@mapNotNull null
+            val episodeNumber = row.episodeNumber ?: parts.getOrNull(2)?.toIntOrNull()
+                ?: return@mapNotNull null
+            val marker = "S${seasonNumber}E${episodeNumber}"
+            EpisodeItem(
+                id = null,
+                contentId = contentId,
+                seasonNumber = seasonNumber,
+                episodeNumber = episodeNumber,
+                title = row.title.substringAfter(" · $marker", "")
+                    .removePrefix(" · ").takeIf(String::isNotBlank),
+                description = null,
+                posterUrl = row.posterUrl,
+                sortOrder = episodeNumber,
+            )
+        }.distinctBy { it.key }
+            .sortedWith(compareBy<EpisodeItem> { it.seasonNumber }.thenBy { it.episodeNumber })
 
     /** Reads a fresh media_sources row for the title or one episode (spec 5.2 rule 3). */
     fun loadSources(languageKey: String? = null, episode: EpisodeItem? = null) {

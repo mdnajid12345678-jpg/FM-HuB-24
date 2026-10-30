@@ -93,7 +93,10 @@ fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val rows by viewModel.rows.collectAsState()
+    val watchProgress by viewModel.watchProgress.collectAsState()
     val sheet by viewModel.sheetState.collectAsState()
+    val downloadedBytes = rows.sumOf { it.sizeBytes ?: 0L }
+    val availableSpace = viewModel.freeSpaceBytes()
     var selection by remember { mutableStateOf(setOf<String>()) }
     var confirmDelete by remember { mutableStateOf<DeleteRequest?>(null) }
     var renameRequest by remember { mutableStateOf<RenameRequest?>(null) }
@@ -115,25 +118,43 @@ fun DownloadsScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (selection.isEmpty()) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringRes(R.string.tab_downloads),
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = stringRes(
+                            R.string.downloads_available_space,
+                            formatBytes(availableSpace),
+                        ),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(7.dp))
                 Text(
-                    text = stringRes(R.string.tab_downloads),
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = stringRes(
-                        R.string.downloads_storage_used,
-                        formatBytes(rows.sumOf { it.sizeBytes ?: 0L }),
-                    ),
+                    text = stringRes(R.string.downloads_storage_used, formatBytes(downloadedBytes)),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(5.dp))
+                ThinProgress(
+                    progress = viewModel.storageUsageFraction(downloadedBytes),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            RoundedCornerShape(2.dp),
+                        ),
                 )
             }
         } else {
@@ -185,6 +206,7 @@ fun DownloadsScreen(
                         if (selection.isEmpty()) {
                             MovieRow(
                                 row = row,
+                                watchProgress = watchProgress[row.record.contentId] ?: 0f,
                                 onOpen = { onPlay(row.record.contentId, null) },
                                 onPause = { viewModel.setPaused(row.record.id, true) },
                                 onResume = { viewModel.setPaused(row.record.id, false) },
@@ -211,20 +233,19 @@ fun DownloadsScreen(
 
                 groups.forEach { (contentId, groupRows) ->
                     val representative = groupRows.first()
-                    val firstEpisode = groupRows.minWithOrNull(
-                        compareBy<DownloadRow> { it.record.seasonNumber ?: Int.MAX_VALUE }
-                            .thenBy { it.record.episodeNumber ?: Int.MAX_VALUE },
-                    )
+                    val episodeKeys = groupRows.mapNotNull { it.record.episodeKey }.distinct()
+                    val groupWatchProgress = if (episodeKeys.isEmpty()) 0f else {
+                        episodeKeys.map { watchProgress[it] ?: 0f }.average().toFloat()
+                    }
                     item(key = "group-$contentId") {
                         if (selection.isEmpty()) {
                             GroupRow(
                                 row = representative,
-                                episodeCount = groupRows.size,
+                                episodeCount = episodeKeys.size,
                                 totalBytes = groupRows.sumOf { it.sizeBytes ?: 0L },
-                                onPlayFirst = {
-                                    firstEpisode?.record?.episodeKey?.let { onPlay(contentId, it) }
-                                },
+                                watchProgress = groupWatchProgress,
                                 onOpenEpisodes = { openGroup = contentId },
+                                onDetails = { onOpenDetails(contentId) },
                                 onDelete = { confirmDelete = DeleteRequest(groupRows, contentId) },
                                 onRename = {
                                     renameRequest = RenameRequest(
@@ -345,6 +366,7 @@ fun DownloadsScreen(
 @Composable
 private fun MovieRow(
     row: DownloadRow,
+    watchProgress: Float,
     onOpen: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -401,6 +423,19 @@ private fun MovieRow(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = watchProgressLabel(watchProgress),
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ThinProgress(
+                progress = watchProgress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(2.dp)),
             )
             if (phase == DownloadState.Phase.DOWNLOADING ||
                 phase == DownloadState.Phase.PAUSED || phase == DownloadState.Phase.QUEUED
@@ -504,18 +539,21 @@ private fun GroupRow(
     row: DownloadRow,
     episodeCount: Int,
     totalBytes: Long,
-    onPlayFirst: () -> Unit,
+    watchProgress: Float,
     onOpenEpisodes: () -> Unit,
+    onDetails: () -> Unit,
     onDelete: () -> Unit,
     onRename: () -> Unit,
     onLongPress: () -> Unit,
 ) {
     var menuExpanded by remember(row.record.contentId) { mutableStateOf(false) }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onOpenEpisodes, onLongClick = onLongPress),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.width(84.dp).clickable(onClick = onPlayFirst)) {
+        Box(modifier = Modifier.width(84.dp)) {
             LandscapeThumb(
                 url = row.record.posterUrl,
                 contentDescription = row.record.title,
@@ -538,7 +576,6 @@ private fun GroupRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .combinedClickable(onClick = onPlayFirst, onLongClick = onLongPress),
         ) {
             Text(
                 text = seriesTitle(row.record.title),
@@ -548,9 +585,31 @@ private fun GroupRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "$episodeCount · ${formatBytes(totalBytes)}",
+                text = stringRes(R.string.downloads_episode_count, episodeCount) +
+                    " · ${formatBytes(totalBytes)}",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = watchProgressLabel(watchProgress),
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = stringRes(R.string.downloads_all_episodes),
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            ThinProgress(
+                progress = watchProgress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(2.dp)),
             )
         }
         Box {
@@ -563,8 +622,8 @@ private fun GroupRow(
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
-                    text = { Text(stringRes(R.string.menu_play)) },
-                    onClick = { menuExpanded = false; onPlayFirst() },
+                    text = { Text(stringRes(R.string.menu_details)) },
+                    onClick = { menuExpanded = false; onDetails() },
                 )
                 DropdownMenuItem(
                     text = { Text(stringRes(R.string.menu_open_episodes)) },
@@ -728,6 +787,13 @@ private fun episodeTitle(title: String, season: Int?, episode: Int?): String {
         .ifBlank { "Episode ${episode ?: ""}".trim() }
 }
 
+@Composable
+private fun watchProgressLabel(progress: Float): String = when {
+    progress >= 0.95f -> stringRes(R.string.downloads_watch_complete)
+    progress <= 0f -> stringRes(R.string.downloads_watch_not_started)
+    else -> stringRes(R.string.downloads_watch_progress, (progress * 100).toInt())
+}
+
 /** Series group detail: season chips and the episode list (spec 6.8). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -739,10 +805,12 @@ private fun GroupDetail(
     onPlay: (String, String?) -> Unit,
 ) {
     val rows by viewModel.rowsForGroup(contentId).collectAsState()
+    val watchProgress by viewModel.watchProgress.collectAsState()
     var season by remember { mutableStateOf<Int?>(null) }
     val seasons = rows.mapNotNull { it.record.seasonNumber }.distinct().sorted()
-    val current = season ?: seasons.firstOrNull()
-    val visible = rows.filter { it.record.seasonNumber == current }
+    val episodeCount = rows.mapNotNull { it.record.episodeKey }.distinct().size
+    val current = season
+    val visible = if (current == null) rows else rows.filter { it.record.seasonNumber == current }
     var confirm by remember { mutableStateOf<DownloadRow?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -769,7 +837,7 @@ private fun GroupDetail(
             )
         }
         Text(
-            text = stringRes(R.string.season_with_episodes, rows.size) + " · " +
+            text = stringRes(R.string.season_with_episodes, episodeCount) + " · " +
                 formatBytes(rows.sumOf { it.sizeBytes ?: 0L }),
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -781,8 +849,18 @@ private fun GroupDetail(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                item(key = "all-episodes") {
+                    com.fmhub24.android.ui.components.SelectChip(
+                        text = stringRes(R.string.downloads_all_episodes),
+                        selected = current == null,
+                        onClick = { season = null },
+                    )
+                }
                 items(seasons) { value ->
-                    val count = rows.count { it.record.seasonNumber == value }
+                    val count = rows.filter { it.record.seasonNumber == value }
+                        .mapNotNull { it.record.episodeKey }
+                        .distinct()
+                        .size
                     com.fmhub24.android.ui.components.SelectChip(
                         text = "${stringRes(R.string.season_number, value)} ($count)",
                         selected = value == current,
@@ -799,6 +877,7 @@ private fun GroupDetail(
         ) {
             items(visible, key = { it.record.id }) { row ->
                 var menuExpanded by remember(row.record.id) { mutableStateOf(false) }
+                val watched = watchProgress[row.record.episodeKey.orEmpty()] ?: 0f
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable {
                         onPlay(row.record.contentId, row.record.episodeKey)
@@ -836,6 +915,21 @@ private fun GroupDetail(
                             ).joinToString(" · "),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = watchProgressLabel(watched),
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ThinProgress(
+                            progress = watched,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    RoundedCornerShape(2.dp),
+                                ),
                         )
                     }
                     when (row.state?.phase) {

@@ -93,6 +93,7 @@
     <string name="details_in_my_list">আমার তালিকায় আছে</string>
     <string name="details_similar">মিলিয়ে যায়</string>
     <string name="details_more">আরও</string>
+    <string name="details_available_offline">অফলাইনে দেখা যাবে</string>
     <string name="details_less">কম</string>
     <string name="language_server_button">ভাষা ও সার্ভার</string>
     <string name="sheet_languages">ভাষা</string>
@@ -161,6 +162,12 @@
 
     <!-- Downloads -->
     <string name="downloads_storage_used">ব্যবহৃত জায়গা: %1$s</string>
+    <string name="downloads_available_space">%1$s খালি আছে</string>
+    <string name="downloads_episode_count">%1$dটি এপিসোড</string>
+    <string name="downloads_all_episodes">সব এপিসোড</string>
+    <string name="downloads_watch_not_started">দেখা শুরু হয়নি</string>
+    <string name="downloads_watch_complete">দেখা হয়েছে</string>
+    <string name="downloads_watch_progress">%1$d%% দেখা হয়েছে</string>
     <string name="empty_downloads_title">এখনো কিছু নেই</string>
     <string name="empty_downloads_detail">ডাউনলোড করা শিরোনাম অফলাইনে চলে।</string>
     <string name="browse_action">দেখুন</string>

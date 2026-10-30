@@ -113,6 +113,11 @@ fun DetailsScreen(
         }
         else -> {
             val item = state.item ?: return
+            val primaryEpisode = state.history?.let { history ->
+                state.episodes.firstOrNull {
+                    it.seasonNumber == history.seasonNumber && it.episodeNumber == history.episodeNumber
+                }
+            } ?: viewModel.firstEpisode()
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
@@ -133,7 +138,8 @@ fun DetailsScreen(
                             context.startActivity(Intent.createChooser(send, null))
                         },
                         onPlay = {
-                            if (item.isLive) onOpenChannel(item.id) else onPlay(item.id, null)
+                            if (item.isLive) onOpenChannel(item.id)
+                            else onPlay(item.id, if (item.usesEpisodes) primaryEpisode?.key else null)
                         },
                     )
                 }
@@ -155,6 +161,7 @@ fun DetailsScreen(
                                 Tag(stringRes(R.string.seasons_count, state.seasons.size))
                             }
                             item.genres.take(2).forEach { genre -> Tag(genre) }
+                            if (state.offlineOnly) Tag(stringRes(R.string.details_available_offline))
                         }
 
                         Spacer(Modifier.height(16.dp))
@@ -389,6 +396,7 @@ private fun MovieActions(
     onDownload: () -> Unit,
     onRefreshSources: () -> Unit,
 ) {
+    val canPlayOffline = state.offlineOnly && downloadState is DownloadButtonState.Completed
     val languageLabel = sources.languageKey?.let { SourceSelection.languageLabel(it, false) }
     val label = when {
         sources.loading -> stringRes(R.string.checking_source)
@@ -406,6 +414,7 @@ private fun MovieActions(
         shape = RoundedCornerShape(10.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier.fillMaxWidth(),
+        enabled = sources.sources.isNotEmpty(),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
@@ -444,7 +453,7 @@ private fun MovieActions(
             onClick = onPlay,
             modifier = Modifier.weight(1f).height(48.dp),
             shape = RoundedCornerShape(10.dp),
-            enabled = sources.sources.isNotEmpty(),
+            enabled = sources.sources.isNotEmpty() || canPlayOffline,
         ) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
@@ -516,7 +525,7 @@ private fun SeriesActions(
             onClick = { onPlayContinue(episode) },
             modifier = Modifier.weight(1f).height(48.dp),
             shape = RoundedCornerShape(10.dp),
-            enabled = episode != null && sources.sources.isNotEmpty(),
+            enabled = episode != null && (sources.sources.isNotEmpty() || state.offlineOnly),
         ) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))

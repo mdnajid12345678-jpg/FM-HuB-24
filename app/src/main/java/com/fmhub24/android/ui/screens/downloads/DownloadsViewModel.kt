@@ -14,6 +14,7 @@ import com.fmhub24.android.data.repo.DownloadRow
 import com.fmhub24.android.data.repo.DownloadsRepository
 import com.fmhub24.android.data.repo.SourcesRepository
 import com.fmhub24.android.data.repo.SourceSelection
+import com.fmhub24.android.data.repo.WatchStateRepository
 import com.fmhub24.android.stream.DownloadAnalyzer
 import com.fmhub24.android.stream.DownloadState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -70,9 +71,14 @@ class DownloadsViewModel @Inject constructor(
     private val sources: SourcesRepository,
     private val catalog: CatalogRepository,
     private val preferences: UserPreferencesRepository,
+    private val watchState: WatchStateRepository,
 ) : ViewModel() {
     val rows: StateFlow<List<DownloadRow>> = repository.rows
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val watchProgress: StateFlow<Map<String, Float>> = watchState.history
+        .map { entries -> entries.associate { it.key to it.progress } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val sheet = MutableStateFlow<DownloadSheetState?>(null)
     val sheetState: StateFlow<DownloadSheetState?> = sheet
@@ -334,11 +340,10 @@ class DownloadsViewModel @Inject constructor(
 
     fun freeSpaceBytes(): Long = repository.freeSpaceBytes()
 
-    fun storageUsageFraction(): Float {
+    fun storageUsageFraction(downloadedBytes: Long): Float {
         val total = repository.totalSpaceBytes()
         if (total <= 0L) return 0f
-        return ((total - repository.freeSpaceBytes()).coerceAtLeast(0L).toFloat() / total)
-            .coerceIn(0f, 1f)
+        return (downloadedBytes.coerceAtLeast(0L).toFloat() / total).coerceIn(0f, 1f)
     }
 
     /** Failed rows retry through the sheet, because a fresh signed link is required (spec 5.2). */

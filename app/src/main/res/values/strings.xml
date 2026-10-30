@@ -94,6 +94,7 @@
     <string name="details_in_my_list">In My list</string>
     <string name="details_similar">Similar</string>
     <string name="details_more">More</string>
+    <string name="details_available_offline">Available offline</string>
     <string name="details_less">Less</string>
     <string name="language_server_button">Language and server</string>
     <string name="sheet_languages">Language</string>
@@ -162,6 +163,12 @@
 
     <!-- Downloads -->
     <string name="downloads_storage_used">Storage used: %1$s</string>
+    <string name="downloads_available_space">%1$s available</string>
+    <string name="downloads_episode_count">%1$d episodes</string>
+    <string name="downloads_all_episodes">All episodes</string>
+    <string name="downloads_watch_not_started">Not watched</string>
+    <string name="downloads_watch_complete">Watched</string>
+    <string name="downloads_watch_progress">%1$d%% watched</string>
     <string name="empty_downloads_title">No downloads yet</string>
     <string name="empty_downloads_detail">Downloaded titles play offline.</string>
     <string name="browse_action">Browse</string>
