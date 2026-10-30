@@ -263,7 +263,7 @@ private fun FeaturedHero(item: MediaItem, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .aspectRatio(1.9f)
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(
                 Brush.linearGradient(listOf(Color(0xFF1C7765), Color(0xFFB99347), Color(0xFF263B31))),
             )
@@ -293,7 +293,7 @@ private fun FeaturedHero(item: MediaItem, onClick: () -> Unit) {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 92.dp, bottom = 22.dp),
+                .padding(start = 16.dp, end = 92.dp, bottom = 22.dp),
         ) {
             Text(
                 stringRes(R.string.home_featured),
@@ -376,13 +376,13 @@ private fun PosterCarousel(
         Spacer(Modifier.height(10.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(items, key = { it.id }) { item ->
                 HomePosterCard(
                     item = item,
                     onClick = { onOpenDetails(item.id) },
-                    modifier = Modifier.width(136.dp),
+                    modifier = Modifier.width(100.dp),
                 )
             }
         }
@@ -400,7 +400,7 @@ private fun HomePosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.76f)
-                .clip(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(
                     Brush.verticalGradient(listOf(Color(0xFF286B54), Color(0xFF34404C), Color(0xFF9D552F))),
                 ),
