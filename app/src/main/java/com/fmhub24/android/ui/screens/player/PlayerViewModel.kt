@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fmhub24.android.data.UserPreferencesRepository
 import com.fmhub24.android.data.model.DataException
+import com.fmhub24.android.data.model.ContentType
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.MediaSource
@@ -77,18 +78,48 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             state.value = state.value.copy(loading = true, failure = null, error = null)
 
-            if (state.value.item == null) {
+            val storedDownload = downloads.recordFor(contentId, episodeKey)
+            if (state.value.item == null && storedDownload == null) {
                 catalog.ensureContent(contentId)
                 val cachedItem = catalog.cachedContent(contentId)
                 if (cachedItem?.usesEpisodes == true && catalog.cachedEpisodes(contentId).isEmpty()) {
                     catalog.ensureStructure(contentId)
                 }
             }
-            val item = catalog.cachedContent(contentId)
+            val item = catalog.cachedContent(contentId) ?: storedDownload?.let { stored ->
+                MediaItem(
+                    id = contentId,
+                    canonicalKey = null,
+                    title = if (episodeKey == null) stored.title else stored.title.substringBefore(" · S"),
+                    originalTitle = null,
+                    contentType = ContentType.from(stored.contentType),
+                    releaseYear = null,
+                    posterUrl = stored.posterUrl,
+                    description = null,
+                    genres = emptyList(),
+                    status = null,
+                    rating = null,
+                    createdAt = null,
+                    updatedAt = null,
+                )
+            }
             val episode = if (episodeKey.isNullOrEmpty()) {
                 null
             } else {
                 catalog.cachedEpisodes(contentId).firstOrNull { it.key == episodeKey }
+                    ?: storedDownload?.let { stored ->
+                        val parts = episodeKey.split('|')
+                        EpisodeItem(
+                            id = null,
+                            contentId = contentId,
+                            seasonNumber = stored.seasonNumber ?: parts.getOrNull(1)?.toIntOrNull() ?: 0,
+                            episodeNumber = stored.episodeNumber ?: parts.getOrNull(2)?.toIntOrNull() ?: 0,
+                            title = null,
+                            description = null,
+                            posterUrl = stored.posterUrl,
+                            sortOrder = null,
+                        )
+                    }
             }
             if (item == null) {
                 state.value = state.value.copy(
