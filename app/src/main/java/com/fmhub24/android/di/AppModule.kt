@@ -22,7 +22,6 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FmHubDatabase =
         Room.databaseBuilder(context, FmHubDatabase::class.java, "fmhub24.db")
-            .fallbackToDestructiveMigration()
             .build()
 
     @Provides

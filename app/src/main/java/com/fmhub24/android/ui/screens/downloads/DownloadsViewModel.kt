@@ -3,6 +3,8 @@ package com.fmhub24.android.ui.screens.downloads
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fmhub24.android.data.model.DataException
+import com.fmhub24.android.data.DownloadDefaults
+import com.fmhub24.android.data.UserPreferencesRepository
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.MediaSource
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 /** State of the Download button on a details page (spec 6.5). */
 sealed interface DownloadButtonState {
@@ -66,6 +69,7 @@ class DownloadsViewModel @Inject constructor(
     private val repository: DownloadsRepository,
     private val sources: SourcesRepository,
     private val catalog: CatalogRepository,
+    private val preferences: UserPreferencesRepository,
 ) : ViewModel() {
     val rows: StateFlow<List<DownloadRow>> = repository.rows
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -130,14 +134,18 @@ class DownloadsViewModel @Inject constructor(
         )
         viewModelScope.launch {
             try {
+                val settings = preferences.settings.first()
                 val found = sources.forTarget(item.id, episode)
                 if (found.isEmpty()) {
                     sheet.value = sheet.value?.copy(phase = DownloadSheetState.Phase.ERROR)
                     return@launch
                 }
                 val languages = SourceSelection.languages(found)
-                val language = languages.firstOrNull()
-                val chosen = SourceSelection.auto(found, language)
+                val language = settings.preferredAudio?.let { preferred ->
+                    languages.firstOrNull { it.equals(preferred, ignoreCase = true) }
+                } ?: languages.firstOrNull()
+                val maxHeight = settings.defaultQuality.toIntOrNull() ?: 1080
+                val chosen = SourceSelection.auto(found, language, maxHeight)
                 val analysis = chosen?.takeIf { it.isHls }?.let { source ->
                     runCatching { DownloadAnalyzer.analyze(appContext(), source, headerMap(source)) }
                         .getOrNull()
@@ -154,7 +162,9 @@ class DownloadsViewModel @Inject constructor(
                     analysis = analysis,
                     selectedLanguage = language,
                     selectedSource = chosen,
-                    selectedHeight = analysis?.video?.maxOfOrNull { it.height },
+                    selectedHeight = settings.defaultQuality.toIntOrNull()
+                        ?.let { preferred -> analysis?.video?.minByOrNull { kotlin.math.abs(it.height - preferred) }?.height }
+                        ?: analysis?.video?.maxOfOrNull { it.height },
                     selectedAudio = analysis?.audio
                         ?.filter { it.supported }
                         ?.mapNotNull { it.language }
@@ -247,7 +257,15 @@ class DownloadsViewModel @Inject constructor(
                     val languagePool = current.selectedLanguage?.let { language ->
                         pool.filter { SourceSelection.matches(it, language) }.ifEmpty { null }
                     } ?: pool
-                    val fresh = SourceSelection.auto(languagePool, current.selectedLanguage)
+                    val selectedQuality = current.selectedSource?.quality
+                    val fresh = languagePool.firstOrNull {
+                        it.serverLabel == current.selectedSource?.serverLabel &&
+                            (selectedQuality == null || it.quality == selectedQuality)
+                    } ?: SourceSelection.auto(
+                        languagePool,
+                        current.selectedLanguage,
+                        current.selectedHeight ?: 1080,
+                    )
                         ?: languagePool.firstOrNull()
                         ?: throw DataException.Malformed("no source")
                     val headers = fresh.headers

@@ -12,9 +12,7 @@ import com.fmhub24.android.data.model.MediaSource
 import java.io.IOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
-import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import javax.net.ssl.SSLException
 import org.json.JSONObject
 
 /** Honest failure categories shown to the user (spec section 8). */
@@ -98,17 +96,15 @@ object StreamEngine {
             when (current) {
                 is HttpDataSource.InvalidResponseCodeException -> {
                     return when (current.responseCode) {
-                        401, 403, 404, 410 -> StreamError.EXPIRED
+                        401, 403, 410 -> StreamError.EXPIRED
                         else -> StreamError.FAILED
                     }
                 }
                 is UnknownHostException, is ConnectException, is NoRouteToHostException,
-                is SocketTimeoutException, is SSLException,
                 -> return StreamError.OFFLINE
                 is IOException -> {
                     // A playlist or segment read that died mid-stream is an expired link.
-                    if (current.message.orEmpty().contains("403", ignoreCase = true) ||
-                        current.message.orEmpty().contains("404", ignoreCase = true)
+                    if (current.message.orEmpty().contains("403", ignoreCase = true)
                     ) {
                         return StreamError.EXPIRED
                     }

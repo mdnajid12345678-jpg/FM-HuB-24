@@ -48,17 +48,28 @@ class SourcesRepository @Inject constructor(
      */
     suspend fun languageIndex(contentIds: List<String>): Map<String, Set<String>> {
         if (contentIds.isEmpty()) return emptyMap()
-        val ids = contentIds.joinToString(",") { "\"$it\"" }
-        val rows = try {
-            query(
-                listOf(
-                    "select" to "content_id,server_name,language,is_dub,status",
-                    "content_id" to "in.($ids)",
-                ),
-            )
-        } catch (error: DataException.Http) {
-            if (error.code != 400) throw error
-            query(listOf("select" to "content_id,server_name,status", "content_id" to "in.($ids)"))
+        val rows = mutableListOf<MediaSource>()
+        contentIds.distinct().chunked(LANGUAGE_INDEX_BATCH_SIZE).forEach { batch ->
+            val ids = batch.joinToString(",") { "\"$it\"" }
+            val resolved = try {
+                query(
+                    listOf(
+                        "select" to "content_id,server_name,language,is_dub,status",
+                        "content_id" to "in.($ids)",
+                        "status" to "eq.resolved",
+                    ),
+                )
+            } catch (error: DataException.Http) {
+                if (error.code != 400) throw error
+                query(
+                    listOf(
+                        "select" to "content_id,server_name,status",
+                        "content_id" to "in.($ids)",
+                        "status" to "eq.resolved",
+                    ),
+                )
+            }
+            rows += resolved
         }
 
         val index = mutableMapOf<String, MutableSet<String>>()
@@ -70,6 +81,10 @@ class SourcesRepository @Inject constructor(
             index.getOrPut(contentId) { mutableSetOf() }.add(language)
         }
         return index
+    }
+
+    companion object {
+        const val LANGUAGE_INDEX_BATCH_SIZE = 40
     }
 
     private suspend fun query(params: List<Pair<String, String>>): List<MediaSource> =

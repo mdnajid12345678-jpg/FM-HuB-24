@@ -79,6 +79,36 @@ class DownloadsRepository @Inject constructor(
 
     suspend fun recordWithId(id: String): DownloadEntity? = dao.byId(id)
 
+    suspend fun offlineSource(contentId: String, episodeKey: String?): MediaSource? =
+        withContext(Dispatchers.IO) {
+            dao.all().asSequence().filter {
+                it.contentId == contentId && it.episodeKey == episodeKey
+            }.mapNotNull { record ->
+                val request = DownloadEngine.completedRequest(context, record.id) ?: return@mapNotNull null
+                val uri = request.uri.toString()
+                val hls = request.mimeType.equals("application/x-mpegURL", ignoreCase = true) ||
+                    uri.substringBefore("?").endsWith(".m3u8", ignoreCase = true)
+                MediaSource(
+                    id = record.id,
+                    contentId = contentId,
+                    episodeId = episodeKey,
+                    seasonNumber = record.seasonNumber,
+                    episodeNumber = record.episodeNumber,
+                    serverName = record.serverName,
+                    mediaUrl = uri,
+                    quality = record.quality,
+                    linkType = if (hls) "M3U8" else "VIDEO",
+                    status = "offline",
+                    headers = com.fmhub24.android.stream.StreamEngine.decodeHeaders(request.data),
+                    columnLanguage = record.language,
+                    columnIsDub = null,
+                    columnCodec = null,
+                    resolvedAt = null,
+                    expiresAt = null,
+                )
+            }.firstOrNull()
+        }
+
     suspend fun hasDownload(contentId: String, episodeKey: String?): Boolean =
         dao.all().any { it.contentId == contentId && it.episodeKey == episodeKey }
 
@@ -113,7 +143,10 @@ class DownloadsRepository @Inject constructor(
                 episodeKey = episodeKey,
                 seasonNumber = episode?.seasonNumber,
                 episodeNumber = episode?.episodeNumber,
-                title = if (episode == null) item.title else item.title,
+                title = if (episode == null) item.title else buildString {
+                    append("${item.title} · S${episode.seasonNumber}E${episode.episodeNumber}")
+                    episode.title?.takeIf { it.isNotBlank() }?.let { append(" · $it") }
+                },
                 posterUrl = episode?.posterUrl ?: item.posterUrl,
                 contentType = item.contentType.raw,
                 serverName = source.serverLabel,
@@ -147,14 +180,17 @@ class DownloadsRepository @Inject constructor(
     fun resumeAll() = DownloadEngine.resumeAll(context)
 
     suspend fun remove(id: String) {
-        dao.delete(id)
         DownloadEngine.remove(context, id)
+        dao.delete(id)
     }
 
     suspend fun removeTarget(contentId: String, episodeKey: String?) {
-        dao.deleteByTarget(contentId, episodeKey)
-        dao.all().filter { it.contentId == contentId && it.episodeKey == episodeKey }
-            .forEach { DownloadEngine.remove(context, it.id) }
+        val targets = dao.all().filter {
+            it.contentId == contentId && (episodeKey == null || it.episodeKey == episodeKey)
+        }
+        targets.forEach { DownloadEngine.remove(context, it.id) }
+        if (episodeKey == null) dao.deleteByContentId(contentId)
+        else dao.deleteByTarget(contentId, episodeKey)
     }
 
     /** Free bytes on the volume that holds app-private storage. */

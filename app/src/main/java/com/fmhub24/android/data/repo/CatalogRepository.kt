@@ -14,6 +14,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -26,6 +28,8 @@ class CatalogRepository @Inject constructor(
     private val dao: CatalogDao,
     private val rest: SupabaseRest,
 ) {
+    private val refreshMutex = Mutex()
+    @Volatile private var lastSuccessfulRefreshMs = 0L
     val contents: Flow<List<MediaItem>> = dao.observeContents().map { rows -> rows.map(::toMediaItem) }
 
     fun search(query: String): Flow<List<MediaItem>> = dao.observeSearch(query)
@@ -49,32 +53,50 @@ class CatalogRepository @Inject constructor(
      * Incremental sync: only rows newer than the newest cached row are pulled, then their seasons
      * and episodes. Returns null on success or the failure to show in the UI.
      */
-    suspend fun refresh(): DataException? {
-        return try {
-            val latest = dao.latestUpdatedAt()
-            val updatedIds = mutableSetOf<String>()
+    suspend fun refresh(): DataException? = refreshMutex.withLock {
+        if (System.currentTimeMillis() - lastSuccessfulRefreshMs < REFRESH_DEBOUNCE_MS) {
+            return@withLock null
+        }
+        try {
+            val currentIds = mutableSetOf<String>()
+            val structureIds = mutableSetOf<String>()
+            val cachedById = dao.contents().associateBy { it.id }
             var offset = 0
-            while (offset < MAX_ROWS) {
+            var completeSnapshot = true
+            while (true) {
                 val page = rest.select(
                     table = "media_contents",
-                    query = buildList {
-                        add("select" to "*")
-                        if (latest != null) add("updated_at" to "gt.$latest")
-                        add("order" to "updated_at.asc")
-                        add("limit" to PAGE_SIZE.toString())
-                        add("offset" to offset.toString())
-                    },
+                    query = listOf(
+                        "select" to "*",
+                        "order" to "id.asc",
+                        "limit" to PAGE_SIZE.toString(),
+                        "offset" to offset.toString(),
+                    ),
                 )
+                if (page.isEmpty()) break
                 val rows = page.mapNotNull(::contentFromJson)
-                if (rows.isEmpty()) break
-                dao.upsertContents(rows)
-                rows.forEach { updatedIds += it.id }
-                if (rows.size < PAGE_SIZE) break
+                if (rows.isNotEmpty()) dao.upsertContents(rows)
+                rows.forEach { row ->
+                    currentIds += row.id
+                    if (cachedById[row.id]?.updatedAt != row.updatedAt) structureIds += row.id
+                }
+                if (page.size < PAGE_SIZE) break
                 offset += PAGE_SIZE
+                if (offset >= MAX_ROWS) {
+                    completeSnapshot = false
+                    break
+                }
             }
-            if (updatedIds.isNotEmpty()) {
-                syncStructure(updatedIds.take(STRUCTURE_BATCH))
+            // Never infer deletion from a capped or failed snapshot.
+            if (completeSnapshot) {
+                dao.contents().filter { it.id !in currentIds }.forEach { stale ->
+                    dao.clearSeasons(stale.id)
+                    dao.clearEpisodes(stale.id)
+                    dao.deleteContent(stale.id)
+                }
             }
+            syncStructure(structureIds.toList())?.let { return@withLock it }
+            lastSuccessfulRefreshMs = System.currentTimeMillis()
             null
         } catch (error: DataException) {
             error
@@ -102,12 +124,22 @@ class CatalogRepository @Inject constructor(
 
     /** Seasons and episodes for one title, stored in the cache (spec 5.1 ordering). */
     suspend fun ensureStructure(contentId: String): DataException? {
-        if (dao.seasons(contentId).isNotEmpty() || dao.episodes(contentId).isNotEmpty()) return null
-        return syncStructure(listOf(contentId))
+        val hasCachedStructure = dao.seasons(contentId).isNotEmpty() ||
+            dao.episodes(contentId).isNotEmpty()
+        val error = syncStructure(listOf(contentId))
+        return if (error != null && hasCachedStructure) null else error
     }
 
     suspend fun syncStructure(contentIds: List<String>): DataException? {
         if (contentIds.isEmpty()) return null
+        contentIds.distinct().chunked(STRUCTURE_BATCH).forEach { batch ->
+            val error = syncStructureBatch(batch)
+            if (error != null) return error
+        }
+        return null
+    }
+
+    private suspend fun syncStructureBatch(contentIds: List<String>): DataException? {
         return try {
             val filter = contentIds.joinToString(",") { "\"$it\"" }
             val seasons = rest.select(
@@ -154,6 +186,7 @@ class CatalogRepository @Inject constructor(
         const val PAGE_SIZE = 200
         const val MAX_ROWS = 5_000
         const val STRUCTURE_BATCH = 60
+        const val REFRESH_DEBOUNCE_MS = 30_000L
 
         fun rowId(json: JSONObject, key: String = "id"): String? {
             if (!json.has(key) || json.isNull(key)) return null

@@ -25,9 +25,11 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,15 +45,12 @@ import androidx.compose.ui.unit.sp
 import com.fmhub24.android.BuildConfig
 import com.fmhub24.android.R
 import com.fmhub24.android.ui.components.stringRes
-import com.fmhub24.android.ui.screens.update.ForceUpdateEntryPoint
-import com.fmhub24.android.ui.screens.update.UpdateAvailableDialog
-import com.fmhub24.android.ui.screens.update.UpdateFlow
 
 /** About (spec 6.9): logo on navy, version, updates, sharing, contact, privacy and terms. */
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    var updateFlow by remember { mutableStateOf<UpdateFlow?>(null) }
+    var infoDialog by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     Column(
         modifier = Modifier
@@ -119,7 +118,7 @@ fun AboutScreen(onBack: () -> Unit) {
         AboutRow(
             icon = Icons.Outlined.SystemUpdate,
             title = stringRes(R.string.check_updates),
-        ) { updateFlow = UpdateFlow.AVAILABLE }
+        ) { infoDialog = R.string.check_updates to R.string.update_check_unavailable }
 
         AboutRow(
             icon = Icons.Outlined.Share,
@@ -142,18 +141,18 @@ fun AboutScreen(onBack: () -> Unit) {
                     data = android.net.Uri.parse("mailto:")
                 }
                 context.startActivity(mail)
-            }
+            }.onFailure { infoDialog = R.string.contact_us to R.string.mail_unavailable }
         }
 
         AboutRow(
             icon = Icons.Outlined.PrivacyTip,
             title = stringRes(R.string.privacy_policy),
-        ) { updateFlow = UpdateFlow.TERMS }
+        ) { infoDialog = R.string.privacy_policy to R.string.privacy_policy_text }
 
         AboutRow(
             icon = Icons.Outlined.Description,
             title = stringRes(R.string.terms_disclaimer),
-        ) { updateFlow = UpdateFlow.TERMS }
+        ) { infoDialog = R.string.terms_disclaimer to R.string.terms_text }
 
         Surface(
             color = MaterialTheme.colorScheme.surface,
@@ -174,19 +173,17 @@ fun AboutScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(24.dp))
     }
 
-    when (updateFlow) {
-        UpdateFlow.AVAILABLE -> UpdateAvailableDialog(
-            onLater = { updateFlow = null },
-            onUpdateNow = { updateFlow = UpdateFlow.INSTALL_PERMISSION },
+    infoDialog?.let { (title, message) ->
+        AlertDialog(
+            onDismissRequest = { infoDialog = null },
+            title = { Text(stringRes(title)) },
+            text = { Text(stringRes(message), fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { infoDialog = null }) {
+                    Text(stringRes(R.string.action_ok))
+                }
+            },
         )
-        UpdateFlow.INSTALL_PERMISSION -> ForceUpdateEntryPoint(
-            onDismiss = { updateFlow = null },
-        )
-        UpdateFlow.TERMS -> UpdateAvailableDialog(
-            onLater = { updateFlow = null },
-            onUpdateNow = { updateFlow = null },
-        )
-        null -> Unit
     }
 }
 
@@ -226,4 +223,3 @@ private fun AboutRow(
         }
     }
 }
-

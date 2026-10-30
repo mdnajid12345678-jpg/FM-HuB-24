@@ -135,27 +135,6 @@ fun SettingsScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = stringRes(R.string.player_no_subtitles),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    com.fmhub24.android.data.SubtitleSizes.SMALL to stringRes(R.string.text_size_small),
-                    com.fmhub24.android.data.SubtitleSizes.MEDIUM to stringRes(R.string.text_size_medium),
-                    com.fmhub24.android.data.SubtitleSizes.LARGE to stringRes(R.string.text_size_large),
-                ).forEach { (size, label) ->
-                    SelectChip(
-                        text = label,
-                        selected = settings?.subtitleSize == size,
-                        onClick = { preferences.setSubtitleSize(size) },
-                    )
-                }
-            }
-
             Spacer(Modifier.height(18.dp))
             SectionHeader(title = stringRes(R.string.download_settings_title))
             Spacer(Modifier.height(8.dp))
@@ -203,26 +182,6 @@ fun SettingsScreen(
                         },
                         selected = settings?.defaultQuality == quality,
                         onClick = { preferences.setDefaultQuality(quality) },
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = stringRes(R.string.preferred_audio),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScrollRow(),
-            ) {
-                listOf("Hindi", "Original", "Telugu", "Tamil", "Multi").forEach { language ->
-                    SelectChip(
-                        text = language,
-                        selected = settings?.preferredAudio == language,
-                        onClick = { preferences.setPreferredAudio(language) },
                     )
                 }
             }

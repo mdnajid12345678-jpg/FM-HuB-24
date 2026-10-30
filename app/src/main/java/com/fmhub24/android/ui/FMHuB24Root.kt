@@ -55,7 +55,6 @@ import com.fmhub24.android.R
 import com.fmhub24.android.data.ThemeMode
 import com.fmhub24.android.ui.navigation.FmHubApp
 import com.fmhub24.android.ui.theme.FMHuB24Theme
-import kotlinx.coroutines.delay
 
 private const val LANGUAGE_SYSTEM = ""
 private const val LANGUAGE_ENGLISH = "en"
@@ -70,13 +69,7 @@ fun FMHuB24Root(
     viewModel: PreferencesViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsState()
-    var introComplete by rememberSaveable { mutableStateOf(false) }
     var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(2_600)
-        introComplete = true
-    }
 
     // Applies the stored preference after every launch and after each change.
     LaunchedEffect(settings?.languageTag) {
@@ -94,7 +87,7 @@ fun FMHuB24Root(
 
     FMHuB24Theme(themeMode = settings?.theme ?: ThemeMode.DARK) {
         when {
-            !introComplete || settings == null -> SplashScreen()
+            settings == null -> SplashScreen()
             settings?.languageTag == null -> LanguagePickerScreen(
                 onContinue = { languageTag -> viewModel.chooseLanguage(languageTag) },
             )

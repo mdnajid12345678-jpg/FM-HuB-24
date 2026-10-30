@@ -11,6 +11,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
@@ -24,6 +25,7 @@ import androidx.media3.exoplayer.offline.DownloaderFactory
 import androidx.media3.exoplayer.offline.ProgressiveDownloader
 import androidx.media3.exoplayer.offline.WritableDownloadIndex
 import androidx.media3.exoplayer.offline.DownloadService
+import androidx.media3.exoplayer.scheduler.Requirements
 import com.fmhub24.android.MainActivity
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +96,29 @@ object DownloadEngine {
     fun manager(context: Context): DownloadManager {
         init(context)
         return downloadManager
+    }
+
+    fun configure(context: Context, wifiOnly: Boolean, parallelDownloads: Int) {
+        init(context)
+        downloadManager.maxParallelDownloads = parallelDownloads.coerceIn(1, 5)
+        downloadManager.setRequirements(
+            if (wifiOnly) Requirements(Requirements.NETWORK_UNMETERED) else Requirements(0),
+        )
+    }
+
+    fun completedRequest(context: Context, id: String): DownloadRequest? = runCatching {
+        init(context)
+        downloadIndex.getDownload(id)
+            ?.takeIf { it.state == Download.STATE_COMPLETED }
+            ?.request
+    }.getOrNull()
+
+    fun cacheDataSourceFactory(): DataSource.Factory {
+        check(ready) { "Download cache has not been initialized" }
+        return CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(null)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 
     // ------------------------------------------------------------------------------------------
@@ -176,21 +201,39 @@ object DownloadEngine {
             ),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val cancelIntent = PendingIntent.getService(
-            context,
-            2,
-            DownloadService.buildRemoveAllDownloadsIntent(
+        val cancelTarget = downloads.firstOrNull {
+            it.state == Download.STATE_DOWNLOADING || it.state == Download.STATE_QUEUED
+        }
+        val cancelIntent = cancelTarget?.let {
+            val cancelAction = DownloadService.buildRemoveDownloadIntent(
                 context,
                 FmHubDownloadService::class.java,
+                it.request.id,
                 true,
-            ),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+            )
+            PendingIntent.getService(
+                context,
+                2,
+                cancelAction,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
 
         val downloading = downloads.count {
             it.state == Download.STATE_DOWNLOADING || it.state == Download.STATE_QUEUED
         }
-        val percent = downloads.maxOfOrNull { it.getPercentDownloaded() }?.takeIf { it > 0f } ?: 0f
+        val activeDownloads = downloads.filter {
+                it.state == Download.STATE_DOWNLOADING || it.state == Download.STATE_QUEUED
+        }
+        val knownSizeDownloads = activeDownloads.filter { it.contentLength > 0L }
+        val percent = if (knownSizeDownloads.isNotEmpty()) {
+            val totalBytes = knownSizeDownloads.sumOf { it.contentLength }
+            (knownSizeDownloads.sumOf { it.getBytesDownloaded() }.toDouble() /
+                totalBytes.toDouble() * 100.0).toFloat().coerceIn(0f, 100f)
+        } else if (downloading > 0) {
+            activeDownloads.map { it.getPercentDownloaded().takeIf { value -> value >= 0f } ?: 0f }
+                .average().toFloat().coerceIn(0f, 100f)
+        } else 0f
 
         val builder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
@@ -217,13 +260,15 @@ object DownloadEngine {
                     pauseIntent,
                 ).build(),
             )
-            .addAction(
+            .apply {
+                cancelIntent?.let { cancel -> addAction(
                 Notification.Action.Builder(
                     0,
-                    context.getString(com.fmhub24.android.R.string.action_delete),
-                    cancelIntent,
+                    context.getString(com.fmhub24.android.R.string.action_cancel_download),
+                    cancel,
                 ).build(),
-            )
+                ) }
+            }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             builder.setProgress(100, percent.toInt(), downloading > 0 && percent <= 0f)
         }

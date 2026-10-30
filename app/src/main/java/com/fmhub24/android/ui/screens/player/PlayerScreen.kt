@@ -37,7 +37,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Forward10
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Movie
@@ -94,6 +93,7 @@ import com.fmhub24.android.ui.components.formatClock
 import com.fmhub24.android.ui.components.stringRes
 import com.fmhub24.android.stream.StreamEngine
 import com.fmhub24.android.stream.StreamError
+import com.fmhub24.android.stream.DownloadEngine
 import kotlinx.coroutines.delay
 
 private enum class SeekRipple { LEFT, RIGHT }
@@ -110,6 +110,7 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val savedPlaybackSpeed by viewModel.playbackSpeed.collectAsState(initial = 1f)
     val activity = LocalContext.current.findActivity()
 
     DisposableEffect(Unit) {
@@ -151,6 +152,7 @@ fun PlayerScreen(
         else -> PlayerContent(
             state = state,
             viewModel = viewModel,
+            savedPlaybackSpeed = savedPlaybackSpeed,
             onBack = onBack,
             onOpenEpisode = onOpenEpisode,
         )
@@ -174,35 +176,80 @@ fun PlayerScreen(
 private fun PlayerContent(
     state: PlayerUiState,
     viewModel: PlayerViewModel,
+    savedPlaybackSpeed: Float,
     onBack: () -> Unit,
     onOpenEpisode: (String, String?) -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val source = state.source ?: return
     val headers = source.headers
 
     val player = remember(source.mediaUrl) {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(StreamEngine.dataSourceFactory(headers)),
+                DefaultMediaSourceFactory(
+                    if (source.status == "offline") DownloadEngine.cacheDataSourceFactory()
+                    else StreamEngine.dataSourceFactory(headers),
+                ),
             )
-            .setSeekBackIncrementMs(10_000)
-            .setSeekForwardIncrementMs(10_000)
-            .build()
-            .apply {
-                setMediaItem(
-                    androidx.media3.common.MediaItem.Builder()
-                        .setUri(source.mediaUrl)
-                        .setMimeType(StreamEngine.mimeTypeFor(source))
-                        .build(),
-                )
-                playWhenReady = true
-                prepare()
-            }
+                .setSeekBackIncrementMs(10_000)
+                .setSeekForwardIncrementMs(10_000)
+                .build()
     }
 
     DisposableEffect(source.mediaUrl) {
-        onDispose { player.release() }
+        val window = context.findActivity()?.window
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                viewModel.handlePlaybackError(StreamEngine.classify(error))
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                    val finalDuration = player.duration
+                    if (finalDuration > 0L) viewModel.onPlaybackCompleted(finalDuration)
+                    state.nextEpisode?.let { next ->
+                        onOpenEpisode(state.item?.id.orEmpty(), next.key)
+                    }
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            if (player.duration > 0L) {
+                viewModel.recordProgress(player.currentPosition, player.duration)
+            }
+            player.removeListener(listener)
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            player.release()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                player.pause()
+                if (player.duration > 0L) {
+                    viewModel.recordProgress(player.currentPosition, player.duration)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(player, source.mediaUrl) {
+        player.setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
+        player.setMediaItem(
+            androidx.media3.common.MediaItem.Builder()
+                .setUri(source.mediaUrl)
+                .setMimeType(StreamEngine.mimeTypeFor(source))
+                .build(),
+        )
+        player.playWhenReady = true
+        player.prepare()
     }
 
     var position by remember { mutableLongStateOf(0L) }
@@ -210,6 +257,7 @@ private fun PlayerContent(
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
+    var lastSavedBucket by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(player) {
         while (true) {
@@ -222,11 +270,16 @@ private fun PlayerContent(
         }
     }
 
-    LaunchedEffect(player, position) {
-        if (duration > 0L && position in 2_000L..duration) {
-            viewModel.recordProgress(position, duration)
+    LaunchedEffect(player, position, duration) {
+        if (duration > 0L && position in 2_000L..duration && position / 5_000L != 0L) {
+            val bucket = position / 5_000L
+            if (bucket != lastSavedBucket) {
+                lastSavedBucket = bucket
+                viewModel.recordProgress(position, duration)
+            }
         }
     }
+
 
     var showControls by remember { mutableStateOf(true) }
     LaunchedEffect(showControls, isPlaying) {
@@ -244,10 +297,9 @@ private fun PlayerContent(
 
     var locked by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<PlayerPanel?>(null) }
-    var speed by remember { mutableFloatStateOf(1f) }
+    var speed by remember(savedPlaybackSpeed) { mutableFloatStateOf(savedPlaybackSpeed) }
     var gestureHint by remember { mutableStateOf<Pair<String, Float>?>(null) }
     var seekRipple by remember { mutableStateOf<SeekRipple?>(null) }
-    var castNotice by remember { mutableStateOf(false) }
     var reportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(player, speed) { player.setPlaybackSpeed(speed) }
@@ -426,7 +478,30 @@ private fun PlayerContent(
                     panel = if (panel == chosen) null else chosen
                     showControls = true
                 },
-                onSpeed = { value -> speed = value; panel = null },
+                onSpeed = { value ->
+                    speed = value
+                    viewModel.savePlaybackSpeed(value)
+                    panel = null
+                },
+                onSubtitleOff = {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                        .build()
+                },
+                onSubtitleSelect = { groupIndex, trackIndex ->
+                    val group = tracks.groups[groupIndex]
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                        .addOverride(
+                            androidx.media3.common.TrackSelectionOverride(
+                                group.mediaTrackGroup,
+                                trackIndex,
+                            ),
+                        )
+                        .build()
+                },
                 onLanguage = { language ->
                     viewModel.switchLanguage(language)
                     panel = null
@@ -439,12 +514,17 @@ private fun PlayerContent(
                     locked = true
                     showControls = false
                 },
-                onCast = { castNotice = true },
                 onPip = { enterPip(activity) },
-                onShare = {},
+                onShare = {
+                    val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, viewModel.shareText())
+                    }
+                    context.startActivity(android.content.Intent.createChooser(share, null))
+                },
                 onNextEpisode = {
                     state.nextEpisode?.let { next ->
-                        viewModel.recordProgress(duration, duration)
+                        viewModel.recordProgress(position, duration)
                         onOpenEpisode(state.item?.id.orEmpty(), next.key)
                     }
                 },
@@ -469,25 +549,6 @@ private fun PlayerContent(
                     resumeAsked = true
                 },
             )
-        }
-
-        if (castNotice) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable { castNotice = false },
-                contentAlignment = Alignment.Center,
-            ) {
-                Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)) {
-                    Text(
-                        text = stringRes(R.string.cast_coming_soon),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
-                    )
-                }
-            }
         }
 
         if (reportOpen) {
@@ -516,10 +577,11 @@ private fun ControlsOverlay(
     onSeekTo: (Long) -> Unit,
     onPanel: (PlayerPanel) -> Unit,
     onSpeed: (Float) -> Unit,
+    onSubtitleOff: () -> Unit,
+    onSubtitleSelect: (Int, Int) -> Unit,
     onLanguage: (String) -> Unit,
     onServer: (String) -> Unit,
     onLock: () -> Unit,
-    onCast: () -> Unit,
     onPip: () -> Unit,
     onShare: () -> Unit,
     onNextEpisode: () -> Unit,
@@ -576,9 +638,6 @@ private fun ControlsOverlay(
                     contentDescription = null,
                     tint = Color.White,
                 )
-            }
-            IconButton(onClick = onCast) {
-                Icon(Icons.Outlined.Cast, contentDescription = null, tint = Color.White)
             }
         }
 
@@ -697,14 +756,18 @@ private fun ControlsOverlay(
             ) {
                 when (panel) {
                     PlayerPanel.SPEED -> SpeedPanel(current = speed, onSelect = onSpeed)
-                    PlayerPanel.SUBTITLES -> SubtitlesPanel()
+                    PlayerPanel.SUBTITLES -> SubtitlesPanel(
+                        tracks = tracks,
+                        onOff = onSubtitleOff,
+                        onSelect = onSubtitleSelect,
+                    )
                     PlayerPanel.SETTINGS -> LanguageServerPanel(
                         state = state,
                         onLanguage = onLanguage,
                         onServer = onServer,
                         onReport = onReport,
                     )
-                    else -> EpisodePanel(state = state, onReport = onReport)
+                    else -> EpisodePanel(state = state, onNextEpisode = onNextEpisode)
                 }
             }
         }
@@ -900,8 +963,13 @@ private fun SpeedPanel(current: Float, onSelect: (Float) -> Unit) {
 }
 
 @Composable
-private fun SubtitlesPanel() {
-    val medium = stringRes(R.string.text_size_medium)
+private fun SubtitlesPanel(
+    tracks: Tracks,
+    onOff: () -> Unit,
+    onSelect: (Int, Int) -> Unit,
+) {
+    val subtitleGroups = tracks.groups.withIndex()
+        .filter { it.value.type == C.TRACK_TYPE_TEXT }
     Column(modifier = Modifier.padding(14.dp)) {
         Text(
             text = stringRes(R.string.player_no_subtitles),
@@ -909,30 +977,35 @@ private fun SubtitlesPanel() {
             color = Color.White.copy(alpha = 0.7f),
         )
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SelectChip(text = stringRes(R.string.subtitles_off), selected = true, onClick = {})
-        }
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = stringRes(R.string.text_size_medium),
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.7f),
+        PanelRow(
+            label = stringRes(R.string.subtitles_off),
+            trailing = null,
+            selected = subtitleGroups.none { indexed ->
+                (0 until indexed.value.length).any(indexed.value::isTrackSelected)
+            },
+            onClick = onOff,
         )
-        Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(
-                stringRes(R.string.text_size_small),
-                medium,
-                stringRes(R.string.text_size_large),
-            ).forEach { size ->
-                SelectChip(text = size, selected = size == medium, onClick = {})
+        subtitleGroups.forEach { indexed ->
+            val groupIndex = indexed.index
+            val group = indexed.value
+            for (trackIndex in 0 until group.length) {
+                val format = group.getTrackFormat(trackIndex)
+                val label = format.label?.takeIf { it.isNotBlank() }
+                    ?: format.language?.takeIf { it.isNotBlank() }
+                    ?: "Track ${trackIndex + 1}"
+                PanelRow(
+                    label = label,
+                    trailing = null,
+                    selected = group.isTrackSelected(trackIndex),
+                    onClick = { onSelect(groupIndex, trackIndex) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun EpisodePanel(state: PlayerUiState, onReport: () -> Unit) {
+private fun EpisodePanel(state: PlayerUiState, onNextEpisode: () -> Unit) {
     Column(modifier = Modifier.padding(14.dp)) {
         Text(
             text = stringRes(R.string.chip_episodes),
@@ -946,7 +1019,7 @@ private fun EpisodePanel(state: PlayerUiState, onReport: () -> Unit) {
         Spacer(Modifier.height(10.dp))
         state.nextEpisode?.let { next ->
             Surface(
-                onClick = { onReport() },
+                onClick = onNextEpisode,
                 color = MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(8.dp),
             ) {

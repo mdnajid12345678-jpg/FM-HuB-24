@@ -38,6 +38,7 @@
     <string name="action_pause">থামান</string>
     <string name="action_download">ডাউনলোড</string>
     <string name="action_delete">মুছুন</string>
+    <string name="action_cancel_download">চলমান ডাউনলোড বাতিল</string>
     <string name="action_settings">সেটিংস</string>
 
     <!-- Home -->
@@ -60,13 +61,13 @@
     <string name="play_icon">চালান</string>
 
     <!-- System states -->
-    <string name="state_offline">আপনি অফলাইনে আছেন। ডাউনলোড কাজ করবে।</string>
+    <string name="state_offline">ইন্টারনেট সংযোগ নেই। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
     <string name="state_network_error">সার্ভারে পৌঁছানো যায়নি।</string>
     <string name="state_content_unavailable">এই শিরোনামটি আর পাওয়া যাচ্ছে না।</string>
     <string name="state_maintenance">সেবাটি রক্ষণাবেক্ষণে আছে। পরে আবার চেষ্টা করুন।</string>
     <string name="state_not_configured">এই বিল্ডে ক্যাটালগ কনফিগার করা হয়নি।</string>
-    <string name="state_rls_blocked">ডাটাবেস এই পড়া প্রত্যাখ্যান করেছে (RLS blocks reads)।</string>
-    <string name="state_auth_failed">ক্যাটালগ পড়ার জন্য অ্যাননিমাস সাইন-ইন করা যায়নি।</string>
+    <string name="state_rls_blocked">ক্যাটালগ এখন পাওয়া যাচ্ছে না। পরে আবার চেষ্টা করুন।</string>
+    <string name="state_auth_failed">ক্যাটালগে সংযোগ করা যায়নি। আবার চেষ্টা করুন।</string>
     <string name="state_load_failed">লোড করার সময় কিছু একটা সমস্যা হয়েছে।</string>
     <string name="go_to_downloads">ডাউনলোড খুলুন</string>
 
@@ -134,7 +135,6 @@
     <string name="chip_language">ভাষা</string>
     <string name="chip_quality">কোয়ালিটি</string>
     <string name="chip_speed">গতি</string>
-    <string name="cast_coming_soon">কাস্ট এখনো সংযুক্ত হয়নি।</string>
     <string name="chip_lock">লক</string>
     <string name="player_locked">খুলতে ধরে রাখুন</string>
     <string name="player_brightness">উজ্জ্বলতা</string>
@@ -238,22 +238,13 @@
     <string name="contact_us">যোগাযোগ</string>
     <string name="privacy_policy">প্রাইভেসি পলিসি</string>
     <string name="terms_disclaimer">শর্তাবলি ও দাবিত্যাগ</string>
-    <string name="terms_text">কনটেন্ট তৃতীয় পক্ষের সোর্স থেকে আসে। এটি বিতরণের অধিকার আছে কি না তার দায়িত্ব মালিকের। সরে দেওয়ার অনুরোধ মেনে নেওয়া হয়।</string>
+    <string name="terms_text">কনটেন্ট ব্যবহারের বা বিতরণের অধিকার থাকলেই কেবল তা ব্যবহার করুন। অ্যাপটি মালিকের নির্ধারিত সোর্স থেকে মিডিয়া পড়ে; প্রাপ্যতা ও বিতরণ অধিকারের দায়িত্ব সংশ্লিষ্ট সোর্স ও মালিকের। কপিরাইট লঙ্ঘনে অ্যাপটি ব্যবহার করবেন না। এটি আইনি পরামর্শ নয়।</string>
+    <string name="privacy_policy_text">FMHuB24 কনফিগার করা Supabase সেবা থেকে ক্যাটালগ ও মিডিয়া সোর্সের তথ্য পড়ে এবং anonymous sign-in ব্যবহার করতে পারে। দেখার ইতিহাস, My List, search history, পছন্দ ও download metadata এই ডিভাইসে থাকে। প্লে বা ডাউনলোড শুরুর সময় stream URL ও request header আনা হয়; অ্যাপ এগুলো দেখায় বা শেয়ার করে না। এই সারাংশে hosting provider-এর log বা data retention অন্তর্ভুক্ত নয়; সে বিষয়ে অ্যাপ মালিকের সঙ্গে যোগাযোগ করুন।</string>
+    <string name="update_check_unavailable">এই বিল্ডে স্বয়ংক্রিয় আপডেট ব্যবস্থা নেই। নতুন সংস্করণের জন্য অ্যাপ মালিকের আনুষ্ঠানিক release page দেখুন।</string>
+    <string name="mail_unavailable">এই ডিভাইসে কোনো ইমেইল অ্যাপ নেই।</string>
     <string name="share_text_title">FMHuB24-এ “%1$s” বিনামূল্যে দেখুন</string>
-    <string name="share_text_app">FMHuB24 — মুভি, সিরিজ, অ্যানিমে আর লাইভ টিভি। JUST WATCH FREE.</string>
-    <string name="share_link_label">ডাউনলোড লিংক</string>
-    <string name="update_available_title">আপডেট আছে</string>
-    <string name="update_available_message">FMHuB24-এর নতুন ভার্সন প্রস্তুত।</string>
-    <string name="update_now">এখনই আপডেট</string>
-    <string name="update_later">পরে</string>
-    <string name="update_downloading">আপডেট ডাউনলোড হচ্ছে %1$d%%</string>
-    <string name="update_forced_title">আপডেট করুন</string>
-    <string name="update_forced_message">এই ভার্সনটি আর ব্যবহার করা যাবে না। চালিয়ে যেতে আপডেট করুন।</string>
-    <string name="install_permission_title">এই অ্যাপ থেকে ইনস্টলের অনুমতি দিন</string>
-    <string name="install_permission_step1">চাইলে সেটিংস খুলুন।</string>
-    <string name="install_permission_step2">Allow from this source চালু করুন।</string>
-    <string name="install_permission_step3">ফিরে এসে আপডেট ইনস্টল করুন।</string>
-    <string name="open_settings">সেটিংস খুলুন</string>
+    <string name="share_text_app">FMHuB24 — মুভি, সিরিজ, অ্যানিমে আর লাইভ টিভি। সোর্স ও প্রকাশিত APK: https://github.com/mdnajid12345678-jpg/FM-HuB-24/releases</string>
+    <string name="share_link_label">প্রজেক্ট ও APK releases: https://github.com/mdnajid12345678-jpg/FM-HuB-24/releases</string>
 
     <!-- Filters -->
     <string name="filter_type">ধরন</string>

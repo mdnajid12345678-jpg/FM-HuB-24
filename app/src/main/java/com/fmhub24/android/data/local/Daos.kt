@@ -18,6 +18,9 @@ interface CatalogDao {
     @Query("SELECT * FROM media_contents WHERE id = :id")
     suspend fun content(id: String): MediaContentEntity?
 
+    @Query("DELETE FROM media_contents WHERE id = :id")
+    suspend fun deleteContent(id: String)
+
     @Query("SELECT MAX(updatedAt) FROM media_contents")
     suspend fun latestUpdatedAt(): String?
 
@@ -126,4 +129,7 @@ interface DownloadsDao {
 
     @Query("DELETE FROM downloads WHERE contentId = :contentId AND IFNULL(episodeKey, '') = IFNULL(:episodeKey, '')")
     suspend fun deleteByTarget(contentId: String, episodeKey: String?)
+
+    @Query("DELETE FROM downloads WHERE contentId = :contentId")
+    suspend fun deleteByContentId(contentId: String)
 }

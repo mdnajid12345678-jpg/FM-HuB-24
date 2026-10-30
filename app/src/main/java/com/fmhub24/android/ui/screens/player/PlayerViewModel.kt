@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fmhub24.android.data.UserPreferencesRepository
 import com.fmhub24.android.data.model.DataException
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.MediaSource
 import com.fmhub24.android.data.repo.CatalogRepository
+import com.fmhub24.android.data.repo.DownloadsRepository
 import com.fmhub24.android.data.repo.SourcesRepository
 import com.fmhub24.android.data.repo.SourceSelection
 import com.fmhub24.android.data.repo.WatchStateRepository
@@ -16,6 +18,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -51,7 +55,10 @@ class PlayerViewModel @Inject constructor(
     private val catalog: CatalogRepository,
     private val sources: SourcesRepository,
     private val watchState: WatchStateRepository,
+    private val preferences: UserPreferencesRepository,
+    private val downloads: DownloadsRepository,
 ) : ViewModel() {
+    val playbackSpeed = preferences.settings.map { it.playbackSpeed }
     val contentId: String = savedState.get<String>("contentId").orEmpty()
     private val episodeKey: String? = savedState.get<String>("episodeKey").orEmpty()
         .takeIf { it.isNotEmpty() }
@@ -72,7 +79,10 @@ class PlayerViewModel @Inject constructor(
 
             if (state.value.item == null) {
                 catalog.ensureContent(contentId)
-                catalog.ensureStructure(contentId)
+                val cachedItem = catalog.cachedContent(contentId)
+                if (cachedItem?.usesEpisodes == true && catalog.cachedEpisodes(contentId).isEmpty()) {
+                    catalog.ensureStructure(contentId)
+                }
             }
             val item = catalog.cachedContent(contentId)
             val episode = if (episodeKey.isNullOrEmpty()) {
@@ -96,9 +106,32 @@ class PlayerViewModel @Inject constructor(
             } }
 
             try {
+                val offline = downloads.offlineSource(contentId, episode?.key)
+                if (offline != null) {
+                    state.value = state.value.copy(
+                        item = item,
+                        episode = episode,
+                        loading = false,
+                        source = offline,
+                        alternatives = listOf(offline),
+                        languages = listOf(offline.language ?: "Original"),
+                        languageKey = offline.language ?: "Original",
+                        error = null,
+                        failure = null,
+                        resumePositionMs = history?.positionMs ?: 0L,
+                        resumeDurationMs = history?.durationMs ?: 0L,
+                        nextEpisode = next,
+                        retriedAfterExpiry = false,
+                    )
+                    return@launch
+                }
                 val found = sources.forTarget(contentId, episode)
                 val languages = SourceSelection.languages(found)
-                val chosenLanguage = languageKey ?: state.value.languageKey ?: languages.firstOrNull()
+                val preferredAudio = preferences.settings.first().preferredAudio
+                val chosenLanguage = languageKey ?: state.value.languageKey
+                    ?: preferredAudio?.let { preferred ->
+                        languages.firstOrNull { it.equals(preferred, ignoreCase = true) }
+                    } ?: languages.firstOrNull()
                 val pool = chosenLanguage?.let { lang ->
                     found.filter { SourceSelection.matches(it, lang) }.ifEmpty { null }
                 } ?: found
@@ -165,6 +198,10 @@ class PlayerViewModel @Inject constructor(
         state.value = state.value.copy(failure = null)
     }
 
+    fun savePlaybackSpeed(speed: Float) {
+        viewModelScope.launch { preferences.savePlaybackSpeed(speed) }
+    }
+
     fun switchSource(serverLabel: String) {
         prepare(languageKey = state.value.languageKey, serverLabel = serverLabel)
     }
@@ -184,6 +221,17 @@ class PlayerViewModel @Inject constructor(
                 positionMs = positionMs,
                 durationMs = durationMs,
             )
+        }
+    }
+
+    fun onPlaybackCompleted(durationMs: Long) {
+        recordProgress(durationMs, durationMs)
+        val current = state.value
+        val item = current.item ?: return
+        viewModelScope.launch {
+            if (preferences.settings.first().deleteAfterWatching) {
+                downloads.removeTarget(item.id, current.episode?.key)
+            }
         }
     }
 

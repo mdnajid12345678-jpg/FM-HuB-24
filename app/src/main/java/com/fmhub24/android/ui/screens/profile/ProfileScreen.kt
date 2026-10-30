@@ -127,15 +127,6 @@ fun ProfileScreen(
             onClick = onOpenSettings,
         )
         ProfileRow(
-            title = stringRes(R.string.player_no_subtitles),
-            value = if (settings == null) {
-                stringRes(R.string.subtitles_off)
-            } else {
-                subtitleLabel(settings?.subtitleSize.orEmpty())
-            },
-            onClick = onOpenSettings,
-        )
-        ProfileRow(
             title = stringRes(R.string.download_settings_title),
             onClick = onOpenSettings,
         )
@@ -163,13 +154,6 @@ private fun SectionCaption(text: String) {
         color = Color.White.copy(alpha = 0.45f),
         modifier = Modifier.padding(bottom = 8.dp),
     )
-}
-
-@Composable
-private fun subtitleLabel(size: String): String = when (size) {
-    "small" -> stringRes(R.string.text_size_small)
-    "large" -> stringRes(R.string.text_size_large)
-    else -> stringRes(R.string.text_size_medium)
 }
 
 @Composable

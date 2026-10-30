@@ -38,6 +38,7 @@
     <string name="action_pause">Pause</string>
     <string name="action_download">Download</string>
     <string name="action_delete">Delete</string>
+    <string name="action_cancel_download">Cancel active download</string>
     <string name="action_settings">Settings</string>
 
     <!-- Home -->
@@ -60,13 +61,13 @@
     <string name="play_icon">Play</string>
 
     <!-- System states -->
-    <string name="state_offline">You are offline. Downloads still work.</string>
+    <string name="state_offline">No internet connection. Check your connection and try again.</string>
     <string name="state_network_error">Could not reach the server.</string>
     <string name="state_content_unavailable">This title is no longer available.</string>
     <string name="state_maintenance">The service is under maintenance. Please try again later.</string>
     <string name="state_not_configured">The catalog is not configured on this build yet.</string>
-    <string name="state_rls_blocked">The database refused this read (RLS blocks reads).</string>
-    <string name="state_auth_failed">Could not sign in anonymously to read the catalog.</string>
+    <string name="state_rls_blocked">The catalog is temporarily unavailable. Please try again later.</string>
+    <string name="state_auth_failed">Could not connect to the catalog. Please retry.</string>
     <string name="state_load_failed">Something went wrong while loading.</string>
     <string name="go_to_downloads">Open Downloads</string>
 
@@ -134,7 +135,6 @@
     <string name="chip_language">Language</string>
     <string name="chip_quality">Quality</string>
     <string name="chip_speed">Speed</string>
-    <string name="cast_coming_soon">Cast is not connected yet.</string>
     <string name="chip_lock">Lock</string>
     <string name="player_locked">Press and hold to unlock</string>
     <string name="player_brightness">Brightness</string>
@@ -238,22 +238,13 @@
     <string name="contact_us">Contact us</string>
     <string name="privacy_policy">Privacy policy</string>
     <string name="terms_disclaimer">Terms and disclaimer</string>
-    <string name="terms_text">Content is provided by third-party sources. The owner is responsible for having the right to distribute it. Removal requests are honored.</string>
+    <string name="terms_text">Only access or distribute content when you have the right to do so. This app reads media from sources configured by its owner; availability and distribution rights are controlled by those providers and the owner. Do not use the app to infringe copyright. This summary is not legal advice.</string>
+    <string name="privacy_policy_text">FMHuB24 reads catalog and media-source data from its configured Supabase service and may use anonymous sign-in. Watch history, My List, search history, preferences, and download metadata are stored on this device. Stream URLs and request headers are fetched when playback or downloads start and are not displayed or shared by the app. This summary does not cover hosting-provider logs or retention; contact the app owner for those details.</string>
+    <string name="update_check_unavailable">Automatic updates are not configured for this build. Check the app owner’s official release page for a new version.</string>
+    <string name="mail_unavailable">No email app is available on this device.</string>
     <string name="share_text_title">Watch “%1$s” free on FMHuB24</string>
-    <string name="share_text_app">FMHuB24 — movies, series, anime and live TV. JUST WATCH FREE.</string>
-    <string name="share_link_label">Download link</string>
-    <string name="update_available_title">Update available</string>
-    <string name="update_available_message">A newer version of FMHuB24 is ready.</string>
-    <string name="update_now">Update now</string>
-    <string name="update_later">Later</string>
-    <string name="update_downloading">Downloading update %1$d%%</string>
-    <string name="update_forced_title">Please update</string>
-    <string name="update_forced_message">This version can no longer be used. Update to continue.</string>
-    <string name="install_permission_title">Allow installs from this app</string>
-    <string name="install_permission_step1">Open Settings when asked.</string>
-    <string name="install_permission_step2">Turn on Allow from this source.</string>
-    <string name="install_permission_step3">Come back and install the update.</string>
-    <string name="open_settings">Open settings</string>
+    <string name="share_text_app">FMHuB24 — movies, series, anime and live TV. Project source and available APK releases: https://github.com/mdnajid12345678-jpg/FM-HuB-24/releases</string>
+    <string name="share_link_label">Project and APK releases: https://github.com/mdnajid12345678-jpg/FM-HuB-24/releases</string>
 
     <!-- Filters -->
     <string name="filter_type">Type</string>

@@ -35,13 +35,15 @@ Stages 3–7 — screens:
   offline, blocked, report-sent) — `media_url` is never shown or shared.
 - Series, My List, History, Downloads (Media3 `DownloadService`, per-item
   progress, delete), Live TV with categories and a channel player.
-- Profile/About, Settings (theme, language, downloads, playback), update
-  dialogs (fetches the release feed, shows an honest message when unavailable).
+- Profile/About, Settings (theme, language, downloads, playback), in-app privacy
+  and terms summaries. Automatic update installation is not configured; About
+  says so clearly and links to the official GitHub releases page.
 - Every list has an empty state; report-sending states honestly that the
   backend endpoint is not implemented yet.
 
-Verified locally: `assembleDebug` and `testDebugUnitTest` both pass (no unit
-test sources yet); CI builds the APK on every push to `main`.
+The stream error classifier has unit coverage for offline, timeout/TLS and HTTP
+404 cases. Release builds enable R8 shrinking/obfuscation. The GitHub Actions
+workflow runs the unit tests and builds a debug APK on pushes to `main`.
 
 Screen layouts, colours, chips, rows, badges and the splash timeline follow the
 attached `FMHuB24_Designs.html` mockups (accent `#2F78EE`, background `#05052B`,
@@ -66,6 +68,8 @@ Notes:
   committed to this repository. The workflow fails early with a clear message if
   either secret is missing.
 - Never put a `service_role` key in a secret here — it would end up inside the APK.
+- Release signing is intentionally not configured until the app owner provides
+  and stores a signing key securely; the Actions artifact is the debug APK.
 
 ## Supabase access the app needs
 
@@ -94,6 +98,11 @@ Without the `GRANT` PostgREST answers `permission denied for table`; without a
 permissive `SELECT` policy it answers `[]` — in both cases the app has nothing to
 show. Writes stay blocked: the existing `deny_client_all` policy still covers
 `INSERT`/`UPDATE`/`DELETE`, and no permissive write policy exists.
+
+Security note: a broad anonymous `SELECT` policy on `media_sources` can expose
+all source URLs and headers to anyone with the public anon key. Use row-level
+restrictions or a server-side/edge function for short-lived source resolution;
+never embed a `service_role` key in the APK.
 
 ## Local build
 
