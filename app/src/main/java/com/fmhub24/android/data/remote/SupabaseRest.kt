@@ -31,6 +31,10 @@ class SupabaseRest @Inject constructor(
     private val baseUrl: String = BuildConfig.SUPABASE_URL.trim().trimEnd('/')
     private val anonKey: String = BuildConfig.SUPABASE_ANON_KEY.trim()
 
+    /** Until here, a failing anonymous sign-up is not attempted again (see [validSession]). */
+    @Volatile
+    private var sessionBackoffUntilMs: Long = 0L
+
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && anonKey.isNotBlank()
 
     /** GET one table as JSON rows. [query] holds PostgREST query parameters. */
@@ -124,9 +128,30 @@ class SupabaseRest @Inject constructor(
                 }
             }
         }
-        val created = anonymousSession()
-        sessionStore.save(created)
-        return created
+        sessionBackoffUntilMs.takeIf { it > System.currentTimeMillis() }?.let {
+            throw DataException.AuthFailed("session backoff")
+        }
+        try {
+            val created = anonymousSession()
+            sessionStore.save(created)
+            return created
+        } catch (error: DataException) {
+            // Do not retry the sign-up on every request: it would burn the project's anonymous
+            // sign-up rate limit. [readToken] falls back to the publishable key meanwhile.
+            sessionBackoffUntilMs = System.currentTimeMillis() + SIGNUP_BACKOFF_MS
+            throw error
+        }
+    }
+
+    /**
+     * The token a read runs with: an anonymous session when sign-in works, otherwise the
+     * publishable key itself, which PostgREST executes as the `anon` role. The catalog read
+     * policies cover both roles, so a failed sign-in can never blank the catalog.
+     */
+    private suspend fun readToken(): String = try {
+        validSession().accessToken
+    } catch (_: DataException) {
+        anonKey
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -154,7 +179,7 @@ class SupabaseRest @Inject constructor(
         path: String? = null,
         attempt: Int = 0,
     ): String {
-        val token = authOverride ?: validSession().accessToken
+        val token = authOverride ?: readToken()
         val mediaType = "application/json".toMediaType()
         val requestBuilder = Request.Builder().url(url)
         requestBuilder.header("apikey", anonKey)
@@ -207,6 +232,7 @@ class SupabaseRest @Inject constructor(
 
     companion object {
         const val REQUEST_TIMEOUT_SECONDS = 30L
+        const val SIGNUP_BACKOFF_MS = 60_000L
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)

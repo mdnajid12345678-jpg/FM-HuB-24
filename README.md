@@ -67,6 +67,34 @@ Notes:
   either secret is missing.
 - Never put a `service_role` key in a secret here — it would end up inside the APK.
 
+## Supabase access the app needs
+
+The catalog is read through PostgREST as the `anon`/`authenticated` roles, so the
+project must allow that. Two things blank the app with an empty catalog if they
+are missing, and both were the cause of "no content" on 2026-10-30:
+
+1. **Anonymous sign-in** must be enabled (Dashboard → Authentication → Sign In /
+   Up → Allow anonymous sign-ins). The app creates a session with
+   `POST /auth/v1/signup` and no credentials; if that fails it keeps reading with
+   the publishable key itself, which PostgREST runs as the `anon` role.
+2. **Table privileges and read policies** for the four tables the app reads:
+
+```sql
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT ON public.media_contents, public.seasons,
+                public.episodes, public.media_sources TO anon, authenticated;
+
+CREATE POLICY catalog_read ON public.media_contents FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY catalog_read ON public.seasons       FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY catalog_read ON public.episodes       FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY catalog_read ON public.media_sources  FOR SELECT TO anon, authenticated USING (true);
+```
+
+Without the `GRANT` PostgREST answers `permission denied for table`; without a
+permissive `SELECT` policy it answers `[]` — in both cases the app has nothing to
+show. Writes stay blocked: the existing `deny_client_all` policy still covers
+`INSERT`/`UPDATE`/`DELETE`, and no permissive write policy exists.
+
 ## Local build
 
 Requires JDK 17 and an Android SDK with `platforms;android-37.0` and
