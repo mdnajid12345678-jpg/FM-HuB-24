@@ -1,5 +1,7 @@
 package com.fmhub24.android.ui.screens.profile
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,8 +35,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -44,7 +50,7 @@ import com.fmhub24.android.ui.components.SectionHeader
 import com.fmhub24.android.ui.components.SelectChip
 import com.fmhub24.android.ui.components.stringRes
 
-/** Profile (spec 6.9): My list, History, Appearance, Playback, Download settings, Language, About. */
+/** Profile (spec 6.9) laid out exactly like the design mockup: rows on the elevated surface. */
 @Composable
 fun ProfileScreen(
     onOpenMyList: () -> Unit,
@@ -70,65 +76,77 @@ fun ProfileScreen(
         Spacer(Modifier.height(16.dp))
 
         ProfileRow(
-            icon = Icons.Outlined.List,
             title = stringRes(R.string.my_list_title),
             onClick = onOpenMyList,
         )
         ProfileRow(
-            icon = Icons.Outlined.History,
             title = stringRes(R.string.history_title),
             onClick = onOpenHistory,
         )
 
-        Spacer(Modifier.height(14.dp))
-        SectionHeader(title = stringRes(R.string.appearance_title))
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                ThemeMode.SYSTEM to stringRes(R.string.theme_system),
-                ThemeMode.LIGHT to stringRes(R.string.theme_light),
-                ThemeMode.DARK to stringRes(R.string.theme_dark),
-            ).forEach { (mode, label) ->
-                SelectChip(
-                    text = label,
-                    selected = settings?.theme == mode,
-                    onClick = { preferences.chooseTheme(mode) },
+        SectionCaption(stringRes(R.string.appearance_title))
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(10.dp),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outline,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringRes(R.string.settings_theme),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        ThemeMode.SYSTEM to stringRes(R.string.theme_system),
+                        ThemeMode.LIGHT to stringRes(R.string.theme_light),
+                        ThemeMode.DARK to stringRes(R.string.theme_dark),
+                    ).forEach { (mode, label) ->
+                        SelectChip(
+                            text = label,
+                            selected = settings?.theme == mode,
+                            onClick = { preferences.chooseTheme(mode) },
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        SectionCaption(stringRes(R.string.playback_title))
         ProfileRow(
-            icon = Icons.Outlined.PlayArrow,
-            title = stringRes(R.string.playback_title),
+            title = stringRes(R.string.preferred_audio),
+            value = settings?.preferredAudio ?: stringRes(R.string.auto_option),
             onClick = onOpenSettings,
         )
         ProfileRow(
-            icon = Icons.Outlined.Download,
+            title = stringRes(R.string.player_no_subtitles),
+            value = if (settings == null) {
+                stringRes(R.string.subtitles_off)
+            } else {
+                subtitleLabel(settings?.subtitleSize.orEmpty())
+            },
+            onClick = onOpenSettings,
+        )
+        ProfileRow(
             title = stringRes(R.string.download_settings_title),
             onClick = onOpenSettings,
         )
-
-        Spacer(Modifier.height(14.dp))
-        SectionHeader(title = stringRes(R.string.language_title))
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                "" to stringRes(R.string.app_language_follow_system),
-                "en" to stringRes(R.string.language_english),
-                "bn" to stringRes(R.string.language_bengali),
-            ).forEach { (tag, label) ->
-                SelectChip(
-                    text = label,
-                    selected = settings?.languageTag == tag,
-                    onClick = { preferences.chooseLanguage(tag) },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
         ProfileRow(
-            icon = Icons.Outlined.Info,
+            title = stringRes(R.string.language_title),
+            value = languageLabel(settings?.languageTag),
+            onClick = onOpenSettings,
+        )
+
+        SectionCaption(stringRes(R.string.about_title))
+        ProfileRow(
             title = stringRes(R.string.about_title),
             onClick = onOpenAbout,
         )
@@ -137,39 +155,64 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileRow(icon: ImageVector, title: String, onClick: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
+private fun SectionCaption(text: String) {
+    Spacer(Modifier.height(16.dp))
+    Text(
+        text = text,
+        fontSize = 11.sp,
+        color = Color.White.copy(alpha = 0.45f),
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun subtitleLabel(size: String): String = when (size) {
+    "small" -> stringRes(R.string.text_size_small)
+    "large" -> stringRes(R.string.text_size_large)
+    else -> stringRes(R.string.text_size_medium)
+}
+
+@Composable
+private fun languageLabel(tag: String?): String = when (tag) {
+    "en" -> stringRes(R.string.language_english)
+    "bn" -> stringRes(R.string.language_bengali)
+    else -> stringRes(R.string.app_language_follow_system)
+}
+
+@Composable
+private fun ProfileRow(title: String, onClick: () -> Unit, value: String? = null) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.size(12.dp))
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (value != null) {
             Text(
-                text = title,
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+                text = value,
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.45f),
+                maxLines = 1,
             )
-            Icon(
-                Icons.Outlined.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.width(6.dp))
         }
+        Icon(
+            Icons.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.45f),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }

@@ -162,6 +162,12 @@ fun DangerButton(
     }
 }
 
+/**
+ * Design chips (FMHuB24_Designs.html `.c`): 11sp label, 14dp radius, surface background with a
+ * hairline border; the selected chip sits on a translucent accent with a #BFD8FF label.
+ */
+private val ChipShape = RoundedCornerShape(14.dp)
+
 /** Single-choice chip row used for categories and sort options. */
 @Composable
 fun ChipRow(
@@ -172,26 +178,13 @@ fun ChipRow(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         options.forEach { (value, label) ->
-            val isSelected = value == selected
-            FilterChip(
-                selected = isSelected,
+            DesignChip(
+                text = label,
+                selected = value == selected,
                 onClick = { onSelect(value) },
-                label = { Text(label, maxLines = 1, fontSize = 12.sp) },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    labelColor = MaterialTheme.colorScheme.onSurface,
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    borderColor = MaterialTheme.colorScheme.outline,
-                    selectedBorderColor = MaterialTheme.colorScheme.primary,
-                    enabled = true,
-                    selected = isSelected,
-                ),
             )
         }
     }
@@ -200,23 +193,52 @@ fun ChipRow(
 /** Multi-select chip used inside the filter sheet. */
 @Composable
 fun SelectChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(text, fontSize = 12.sp, maxLines = 1) },
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = MaterialTheme.colorScheme.onSurface,
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-        border = FilterChipDefaults.filterChipBorder(
-            borderColor = MaterialTheme.colorScheme.outline,
-            selectedBorderColor = MaterialTheme.colorScheme.primary,
-            enabled = true,
-            selected = selected,
-        ),
-    )
+    DesignChip(text = text, selected = selected, onClick = onClick)
+}
+
+/** Standalone chip used by the details and player panels (design `.c`). */
+@Composable
+fun DesignChip(
+    text: String,
+    selected: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    val shape = ChipShape
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+                shape = shape,
+            )
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            maxLines = 1,
+            color = if (selected) {
+                Color(0xFFBFD8FF)
+            } else {
+                Color.White.copy(alpha = 0.68f)
+            },
+        )
+    }
 }
 
 // ------------------------------------------------------------------------------------------
@@ -374,33 +396,35 @@ fun OfflineBanner(modifier: Modifier = Modifier) {
     }
 }
 
+/** Design `.live`: translucent red pill, 10sp label, 4dp radius. */
 @Composable
 fun LiveBadge(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.error,
-        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+        shape = RoundedCornerShape(4.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(6.dp)
-                    .background(Color.White, CircleShape),
+                    .size(5.dp)
+                    .background(MaterialTheme.colorScheme.error, CircleShape),
             )
-            Spacer(Modifier.width(5.dp))
+            Spacer(Modifier.width(4.dp))
             Text(
                 text = stringRes(R.string.live_badge),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.error,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Medium,
             )
         }
     }
 }
 
+/** Design `.bar`: 3dp track on the elevated surface, accent fill. */
 @Composable
 fun ThinProgress(progress: Float, modifier: Modifier = Modifier) {
     Box(
@@ -408,7 +432,7 @@ fun ThinProgress(progress: Float, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(3.dp)
             .clip(RoundedCornerShape(2.dp))
-            .background(Color.White.copy(alpha = 0.28f)),
+            .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Box(
             modifier = Modifier

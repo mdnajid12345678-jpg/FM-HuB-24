@@ -269,4 +269,12 @@
     <string name="any_value">Any</string>
     <string name="year_from">From</string>
     <string name="year_to">To</string>
+    <string name="seasons_count">%1$d seasons</string>
+    <string name="progress_percent">%1$d%%</string>
+    <string name="design_hint_multi_select">Long press to select several</string>
+    <string name="downloads_free_space">Free on the phone: %1$s</string>
+    <string name="settings_theme">Theme</string>
+    <string name="live_now">Live now</string>
+    <string name="live_no_seek">No seeking or downloads on live TV</string>
+    <string name="language_hint_later">You can change this later in Settings.</string>
 </resources>

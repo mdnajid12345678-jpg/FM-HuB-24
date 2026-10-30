@@ -269,4 +269,12 @@
     <string name="any_value">যেকোনো</string>
     <string name="year_from">থেকে</string>
     <string name="year_to">পর্যন্ত</string>
+    <string name="seasons_count">%1$d সিজন</string>
+    <string name="progress_percent">%1$d%%</string>
+    <string name="design_hint_multi_select">চেপে ধরলে একাধিক বাছাই</string>
+    <string name="downloads_free_space">ফোনে খালি %1$s</string>
+    <string name="settings_theme">থিম</string>
+    <string name="live_now">এখন সরাসরি</string>
+    <string name="live_no_seek">সিক বার ও ডাউনলোড নেই</string>
+    <string name="language_hint_later">পরে সেটিংসে বদলানো যাবে।</string>
 </resources>

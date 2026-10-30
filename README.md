@@ -43,6 +43,10 @@ Stages 3–7 — screens:
 Verified locally: `assembleDebug` and `testDebugUnitTest` both pass (no unit
 test sources yet); CI builds the APK on every push to `main`.
 
+Screen layouts, colours, chips, rows, badges and the splash timeline follow the
+attached `FMHuB24_Designs.html` mockups (accent `#2F78EE`, background `#05052B`,
+elevated `#16165A`, text-only tab bar with `#7DB0FF` active).
+
 ## Building the APK on GitHub
 
 Every push to `main` runs [`.github/workflows/android.yml`](.github/workflows/android.yml),

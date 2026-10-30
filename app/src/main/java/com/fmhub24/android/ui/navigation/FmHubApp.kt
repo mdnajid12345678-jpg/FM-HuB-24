@@ -1,23 +1,30 @@
 package com.fmhub24.android.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -86,6 +93,39 @@ private val tabs = listOf(
     Tab(Dest.PROFILE, R.string.tab_profile, Icons.Outlined.Person),
 )
 
+/**
+ * Design `.nav`: a hairline-topped, text-only tab bar — 11sp labels, the active tab in the
+ * brand light blue (#7DB0FF) and the rest at 45% white.
+ */
+@Composable
+private fun DesignTabBar(currentRoute: String?, onNavigate: (String) -> Unit) {
+    Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+        ) {
+            tabs.forEach { tab ->
+                val selected = currentRoute == tab.route
+                Text(
+                    text = stringResource(tab.labelRes),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    color = if (selected) {
+                        Color(0xFF7DB0FF)
+                    } else {
+                        Color.White.copy(alpha = 0.45f)
+                    },
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onNavigate(tab.route) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
+
 /** Five-tab shell: the bottom bar shows only on its own tabs (spec section 4). */
 @Composable
 fun FmHubApp(navController: NavHostController) {
@@ -93,35 +133,14 @@ fun FmHubApp(navController: NavHostController) {
     val currentRoute = backStackEntry?.destination?.route
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (currentRoute in Dest.topLevel) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    tabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(Dest.HOME) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = null) },
-                            label = {
-                                Text(
-                                    text = stringResource(tab.labelRes),
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
+                DesignTabBar(currentRoute = currentRoute) { route ->
+                    navController.navigate(route) {
+                        popUpTo(Dest.HOME) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 }
             }

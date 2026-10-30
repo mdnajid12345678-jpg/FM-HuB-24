@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -187,7 +188,7 @@ fun LiveScreen(
                                 columns = GridCells.Fixed(3),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height((((channels.size + 2) / 3) * 132).dp),
+                                    .height((((channels.size + 2) / 3) * 150).dp),
                                 userScrollEnabled = false,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -207,70 +208,52 @@ fun LiveScreen(
 
 @Composable
 private fun FeaturedChannel(channel: MediaItem, onClick: () -> Unit) {
-    Box(
+    // Design: a flat accent banner — channel name on the left, the LIVE pill on the right.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(170.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick),
+            .height(76.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        RemoteImage(
-            url = channel.posterUrl,
-            contentDescription = channel.title,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))),
-                ),
-        )
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(14.dp),
-        ) {
-            LiveBadge()
-            Spacer(Modifier.height(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = channel.title,
-                color = Color.White,
-                fontSize = 17.sp,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             channel.genres.take(2).joinToString(" · ").takeIf { it.isNotBlank() }?.let { labels ->
-                Text(text = labels, color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
+                Text(
+                    text = labels,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                )
             }
         }
+        Spacer(Modifier.width(12.dp))
+        LiveBadge()
     }
 }
 
-/** 1:1 channel tile with a small LIVE dot. */
+/** Design `.po` with `aspect-ratio: 1`: a square channel tile with its name under it. */
 @Composable
 private fun ChannelTile(channel: MediaItem, onClick: () -> Unit) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
-        Box {
-            RemoteImage(
-                url = channel.posterUrl,
-                contentDescription = channel.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(88.dp),
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp)
-                    .background(Color(0xFFFF5C6C), RoundedCornerShape(50))
-                    .width(7.dp)
-                    .height(7.dp),
-            )
-        }
+        RemoteImage(
+            url = channel.posterUrl,
+            contentDescription = channel.title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+        )
         Spacer(Modifier.height(5.dp))
         Text(
             text = channel.title,

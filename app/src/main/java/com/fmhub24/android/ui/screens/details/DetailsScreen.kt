@@ -4,6 +4,7 @@ package com.fmhub24.android.ui.screens.details
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +26,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
@@ -41,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +58,7 @@ import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.repo.SourceSelection
 import com.fmhub24.android.ui.components.EmptyState
+import com.fmhub24.android.ui.components.DesignChip
 import com.fmhub24.android.ui.components.ErrorState
 import com.fmhub24.android.ui.components.InlineSpinner
 import com.fmhub24.android.ui.components.LandscapeThumb
@@ -61,6 +66,7 @@ import com.fmhub24.android.ui.components.LoadingState
 import com.fmhub24.android.ui.components.PosterCard
 import com.fmhub24.android.ui.components.RemoteImage
 import com.fmhub24.android.ui.components.SecondaryButton
+import com.fmhub24.android.ui.components.SectionHeader
 import com.fmhub24.android.ui.components.dataErrorMessage
 import com.fmhub24.android.ui.components.formatBytes
 import com.fmhub24.android.ui.components.stringRes
@@ -140,9 +146,12 @@ fun DetailsScreen(
                             color = MaterialTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             item.releaseYear?.let { Tag(it.toString()) }
                             Tag(typeLabel(item))
+                            if (item.usesEpisodes && state.seasons.size > 1) {
+                                Tag(stringRes(R.string.seasons_count, state.seasons.size))
+                            }
                             item.genres.take(2).forEach { genre -> Tag(genre) }
                         }
 
@@ -181,7 +190,7 @@ fun DetailsScreen(
                                 fontSize = 13.sp,
                                 lineHeight = 19.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = if (expandedDescription) Int.MAX_VALUE else 4,
+                                maxLines = if (expandedDescription) Int.MAX_VALUE else 3,
                                 overflow = TextOverflow.Ellipsis,
                             )
                             if (item.description.length > 120) {
@@ -217,11 +226,20 @@ fun DetailsScreen(
                             ),
                             history = state.history,
                             onClick = { episode -> onPlay(item.id, episode.key) },
+                            onDownload = { episode ->
+                                downloadsViewModel.openSheet(item, episode = episode)
+                            },
                         )
                     }
                 }
 
-                item { SimilarSection(onOpenDetails = onOpenChannel, contentId = item.id) }
+                item {
+                    SimilarSection(
+                        contentId = item.id,
+                        similar = viewModel.similar.collectAsState().value,
+                        onOpenDetails = onOpenChannel,
+                    )
+                }
             }
         }
     }
@@ -261,15 +279,17 @@ fun DetailsScreen(
 
 @Composable
 private fun Tag(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(6.dp),
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .padding(horizontal = 9.dp, vertical = 4.dp),
     ) {
         Text(
             text = text,
             fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            color = Color.White.copy(alpha = 0.68f),
         )
     }
 }
@@ -345,7 +365,7 @@ private fun Banner(
             color = MaterialTheme.colorScheme.primary,
             shape = RoundedCornerShape(50),
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(Alignment.Center)
                 .padding(16.dp),
         ) {
             Icon(
@@ -399,7 +419,16 @@ private fun MovieActions(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (sources.loading) InlineSpinner(size = 16.dp)
+            if (sources.loading) {
+                InlineSpinner(size = 16.dp)
+            } else {
+                Icon(
+                    Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 
@@ -409,6 +438,7 @@ private fun MovieActions(
     }
 
     Spacer(Modifier.height(12.dp))
+    // Design: full-width Play plus a square icon-only download button.
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         androidx.compose.material3.Button(
             onClick = onPlay,
@@ -422,14 +452,17 @@ private fun MovieActions(
         }
         androidx.compose.material3.OutlinedButton(
             onClick = onDownload,
-            modifier = Modifier.weight(1f).height(48.dp),
+            modifier = Modifier.size(48.dp),
             shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(0.dp),
             enabled = sources.sources.isNotEmpty() &&
                 downloadState !is DownloadButtonState.Running,
         ) {
-            Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(downloadState.label(), fontSize = 14.sp, maxLines = 1)
+            Icon(
+                Icons.Outlined.Download,
+                contentDescription = stringRes(R.string.action_download),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
     if (downloadState is DownloadButtonState.Completed) {
@@ -538,28 +571,31 @@ private fun SeasonPickerRow(
     onOpenSheet: () -> Unit,
 ) {
     val first = seasons.firstOrNull()
+    // Design: the selected season as a chip on the left, the episode count as a caption right.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clickable(onClick = onOpenSheet),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
+        DesignChip(
             text = if (first == null) {
                 stringRes(R.string.select_season)
             } else {
-                stringRes(R.string.season_number, first.seasonNumber)
+                stringRes(R.string.season_number, first.seasonNumber) + " ▾"
             },
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onBackground,
+            selected = true,
+            onClick = onOpenSheet,
         )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = "▾",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Spacer(Modifier.weight(1f))
+        val count = episodeCounts[first?.seasonNumber] ?: 0
+        if (count > 0) {
+            Text(
+                text = stringRes(R.string.season_with_episodes, count),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -568,6 +604,7 @@ private fun EpisodeList(
     episodes: List<EpisodeItem>,
     history: com.fmhub24.android.data.repo.HistoryEntry?,
     onClick: (EpisodeItem) -> Unit,
+    onDownload: (EpisodeItem) -> Unit,
 ) {
     if (episodes.isEmpty()) {
         EmptyState(
@@ -578,8 +615,10 @@ private fun EpisodeList(
     }
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         episodes.forEach { episode ->
-            val watched = history?.seasonNumber == episode.seasonNumber &&
+            val matchesHistory = history?.seasonNumber == episode.seasonNumber &&
                 history.episodeNumber == episode.episodeNumber
+            val progress = if (matchesHistory) history?.progress ?: 0f else 0f
+            val watched = matchesHistory && progress >= 0.92f
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -587,11 +626,11 @@ private fun EpisodeList(
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(modifier = Modifier.width(130.dp)) {
+                Box(modifier = Modifier.width(96.dp)) {
                     LandscapeThumb(
                         url = episode.posterUrl,
                         contentDescription = episode.title,
-                        progress = if (watched) history?.progress else null,
+                        progress = if (progress > 0f && !watched) progress else null,
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -604,11 +643,46 @@ private fun EpisodeList(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (watched) {
-                        Text(
-                            text = stringRes(R.string.watched),
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.primary,
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = when {
+                            watched -> stringRes(R.string.watched)
+                            matchesHistory && progress > 0f -> stringRes(
+                                R.string.progress_percent,
+                                (progress * 100).toInt(),
+                            )
+                            else -> stringRes(R.string.action_download)
+                        },
+                        fontSize = 11.sp,
+                        color = if (watched) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+                // Design: watched ✓ in green, an in-progress share in blue, otherwise a download ⤓.
+                when {
+                    watched -> Icon(
+                        Icons.Outlined.Check,
+                        contentDescription = stringRes(R.string.watched),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.secondary,
+                    )
+                    matchesHistory && progress > 0f -> Text(
+                        text = stringRes(R.string.progress_percent, (progress * 100).toInt()),
+                        fontSize = 12.sp,
+                        color = Color(0xFF7DB0FF),
+                    )
+                    else -> IconButton(
+                        onClick = { onDownload(episode) },
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Download,
+                            contentDescription = stringRes(R.string.action_download),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -618,8 +692,31 @@ private fun EpisodeList(
 }
 
 @Composable
-private fun SimilarSection(onOpenDetails: (String) -> Unit, contentId: String) {
-    // Similar titles are resolved by the caller through the catalog: same content_type and an
-    // overlapping genre (spec 5.3). The row is filled from the shared catalog state.
-    Spacer(Modifier.height(8.dp))
+private fun SimilarSection(
+    contentId: String,
+    similar: List<MediaItem>,
+    onOpenDetails: (String) -> Unit,
+) {
+    val items = remember(similar, contentId) { similar.filter { it.id != contentId }.take(6) }
+    if (items.isEmpty()) return
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Spacer(Modifier.height(10.dp))
+        SectionHeader(title = stringRes(R.string.details_similar))
+        Spacer(Modifier.height(10.dp))
+        items.chunked(3).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowItems.forEach { item ->
+                    PosterCard(
+                        item = item,
+                        onClick = { onOpenDetails(item.id) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
 }

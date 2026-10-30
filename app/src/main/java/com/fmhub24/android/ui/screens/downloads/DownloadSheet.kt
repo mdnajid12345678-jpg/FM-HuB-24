@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,6 +31,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fmhub24.android.R
@@ -263,52 +269,68 @@ private fun VersionBlock(sheet: DownloadSheetState, viewModel: DownloadsViewMode
     visible.forEach { source ->
         val supported = CodecSupport.isSupported(source.codec)
         val size = sheet.sizes[viewModel.sourceKey(source)]
-        val subtitle = listOfNotNull(
+        val selected = sheet.selectedSource == source
+        val label = listOfNotNull(
+            source.serverLabel,
             SourceSelection.qualityLabel(source.quality),
             source.codecLabel,
-            size?.let { formatBytes(it) } ?: stringRes(R.string.size_unknown),
         ).joinToString(" · ")
 
+        // Design `.r` / `.r.on` / `.r.off`: label left, size right, unsupported rows dimmed with
+        // their own caption instead of a size.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    if (selected && supported) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                )
+                .border(
+                    width = 1.dp,
+                    color = if (selected && supported) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                )
+                .alpha(if (supported) 1f else 0.45f)
                 .clickable(enabled = supported) { viewModel.selectSource(source) }
-                .padding(vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(
-                selected = sheet.selectedSource == source,
-                onClick = { viewModel.selectSource(source) },
-                enabled = supported,
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = if (selected && supported) {
+                    Color(0xFFBFD8FF)
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = source.serverLabel,
-                        fontSize = 14.sp,
-                        color = if (supported) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (source == recommended && supported) {
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Text(
-                                text = stringRes(R.string.best_badge),
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
+            Spacer(Modifier.width(8.dp))
+            if (!supported) {
                 Text(
-                    text = if (supported) subtitle
-                    else "$subtitle · ${stringRes(R.string.unsupported_on_phone)}",
+                    text = stringRes(R.string.unsupported_on_phone),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    text = size?.let { formatBytes(it) } ?: stringRes(R.string.size_unknown),
+                    fontSize = 11.sp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }

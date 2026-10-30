@@ -10,8 +10,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +20,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -156,21 +158,21 @@ private fun SplashScreen() {
             Spacer(Modifier.height(18.dp))
             AnimatedVisibility(
                 visible = true,
-                enter = fadeIn(tween(700, delayMillis = 400)) +
-                    slideInVertically(tween(700, delayMillis = 400)) { eightDp },
+                enter = fadeIn(tween(600, delayMillis = 1200)) +
+                    slideInVertically(tween(600, delayMillis = 1200)) { eightDp },
             ) {
                 Text(
                     text = stringResource(R.string.app_name),
                     color = Color.White,
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Medium,
                     letterSpacing = 4.sp,
                 )
             }
             Spacer(Modifier.height(6.dp))
             AnimatedVisibility(
                 visible = true,
-                enter = fadeIn(tween(650, delayMillis = 850)),
+                enter = fadeIn(tween(500, delayMillis = 1700)),
             ) {
                 Text(
                     text = stringResource(R.string.tagline),
@@ -192,72 +194,89 @@ private fun LanguagePickerScreen(onContinue: (String) -> Unit) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 24.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp,
-        )
-        Spacer(Modifier.height(28.dp))
+        FmHubLoader(Modifier.size(60.dp))
+        Spacer(Modifier.height(22.dp))
         Text(
             text = stringResource(R.string.welcome_title),
-            style = MaterialTheme.typography.titleLarge,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.welcome_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
+            fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(22.dp))
 
         listOf(
             LANGUAGE_BENGALI to stringResource(R.string.language_bengali),
             LANGUAGE_ENGLISH to stringResource(R.string.language_english),
         ).forEach { (tag, label) ->
             val selected = selectedLanguage == tag
-            Card(
-                onClick = { selectedLanguage = tag },
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(
-                    width = if (selected) 1.5.dp else 1.dp,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.outline
-                    },
-                ),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-                ),
+                    .padding(bottom = 10.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                    .clickable { selectedLanguage = tag }
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = label,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 15.sp,
+                    color = if (selected) {
+                        Color(0xFFBFD8FF)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    modifier = Modifier.weight(1f),
                 )
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .border(1.5.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         Button(
             onClick = { onContinue(selectedLanguage) },
             enabled = selectedLanguage.isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(46.dp),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -265,6 +284,12 @@ private fun LanguagePickerScreen(onContinue: (String) -> Unit) {
         ) {
             Text(stringResource(R.string.continue_button), fontSize = 14.sp)
         }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = stringResource(R.string.language_hint_later),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

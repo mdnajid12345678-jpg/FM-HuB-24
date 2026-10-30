@@ -3,6 +3,8 @@
 package com.fmhub24.android.ui.screens.details
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fmhub24.android.R
@@ -67,13 +73,7 @@ fun LanguageServerSheet(
 
             if (languages.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
-                Text(
-                    text = stringRes(R.string.sheet_languages),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     languages.take(4).forEach { language ->
                         SelectChip(
                             text = SourceSelection.languageLabel(
@@ -145,63 +145,64 @@ private fun ServerRow(
     badge: String?,
     onClick: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        enabled = supported,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(
-            width = if (selected) 1.5.dp else 1.dp,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.outline,
-        ),
-        shape = MaterialTheme.shapes.medium,
+    // Design `.r` / `.r.on` / `.r.off`: one line of "server · quality · codec", the selected row on
+    // a translucent accent, unsupported rows dimmed with their own right-aligned caption.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                when {
+                    !supported -> MaterialTheme.colorScheme.surfaceVariant
+                    selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                },
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected && supported) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+                shape = RoundedCornerShape(10.dp),
+            )
+            .alpha(if (supported) 1f else 0.45f)
+            .clickable(enabled = supported, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RadioButton(selected = selected, onClick = onClick, enabled = supported)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(enabled = supported, onClick = onClick),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (supported) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.alpha(if (supported) 1f else 0.55f),
-                    )
-                    if (badge != null && supported) {
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = MaterialTheme.shapes.small,
-                        ) {
-                            Text(
-                                text = badge,
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-                Text(
-                    text = if (supported) subtitle
-                    else "$subtitle · ${stringRes(R.string.unsupported_on_phone)}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.alpha(if (supported) 1f else 0.7f),
-                )
-            }
+        Text(
+            text = if (badge != null && supported) title else "$title · $subtitle",
+            fontSize = 13.sp,
+            color = if (selected && supported) {
+                Color(0xFFBFD8FF)
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        when {
+            !supported -> Text(
+                text = stringRes(R.string.unsupported_on_phone),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            badge != null -> Text(
+                text = badge,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            else -> Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

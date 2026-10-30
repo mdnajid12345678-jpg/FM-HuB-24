@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -190,7 +191,7 @@ fun ChannelScreen(
                     )
                 }
 
-                Box(modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) {
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
                     LiveBadge()
                 }
 
@@ -265,10 +266,13 @@ fun ChannelScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     val labels = channel?.genres?.take(2)?.joinToString(" · ").orEmpty()
-                    if (labels.isNotBlank()) {
+                    val meta = listOf(labels, stringRes(R.string.live_now))
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                    if (meta.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = labels,
+                            text = meta,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -279,6 +283,7 @@ fun ChannelScreen(
                         androidx.compose.material3.Button(
                             onClick = { channel?.let(viewModel::toggleFavorite) },
                             shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
                         ) {
                             Icon(
                                 if (isFavorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
@@ -306,6 +311,7 @@ fun ChannelScreen(
                         Text(
                             text = stringRes(R.string.other_channels),
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.height(8.dp))
@@ -313,7 +319,7 @@ fun ChannelScreen(
                             items(others, key = { it.id }) { other ->
                                 Column(
                                     modifier = Modifier
-                                        .width(120.dp)
+                                        .width(110.dp)
                                         .clickable { onOpenChannel(other.id) },
                                 ) {
                                     RemoteImage(
@@ -321,7 +327,7 @@ fun ChannelScreen(
                                         contentDescription = other.title,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(72.dp),
+                                            .aspectRatio(1f),
                                     )
                                     Spacer(Modifier.height(4.dp))
                                     Text(
@@ -334,6 +340,14 @@ fun ChannelScreen(
                                 }
                             }
                         }
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = stringRes(R.string.live_no_seek),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }

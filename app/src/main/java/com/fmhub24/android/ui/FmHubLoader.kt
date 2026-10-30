@@ -20,7 +20,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * The FMHuB24 brand loader: five layers sliding in one after another, then the play triangle,
- * on a 2.6 second linear loop. When the system has animations disabled the static mark is shown.
+ * on the design's four-second loop (layers in by 15%, triangle 15–30%, everything fading out
+ * after 85%). When the system has animations disabled the static mark is shown.
  */
 @Composable
 fun FmHubLoader(modifier: Modifier = Modifier.size(96.dp)) {
@@ -29,7 +30,7 @@ fun FmHubLoader(modifier: Modifier = Modifier.size(96.dp)) {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = LinearEasing),
+            animation = tween(durationMillis = 4000, easing = LinearEasing),
         ),
         label = "FMHuB24 logo clock",
     )
@@ -61,15 +62,15 @@ fun FmHubLoader(modifier: Modifier = Modifier.size(96.dp)) {
             )
         } else {
             barPolygons.forEachIndexed { index, (points, brush) ->
-                val phase = (progress - index * 0.04f).coerceIn(0f, 1f)
-                val entered = FastOutSlowInEasing.transform(segment(phase, 0f, 0.24f))
-                val alpha = entered * (1f - segment(phase, 0.8f, 1f))
+                val start = index * 0.015f
+                val entered = FastOutSlowInEasing.transform(segment(progress, start, 0.15f))
+                val alpha = entered * (1f - segment(progress, 0.85f, 1f))
                 val offsetX = -60f * (1f - entered) * scale
                 drawPath(polygon(scale, points, offsetX), brush, alpha = alpha)
             }
 
-            val triangleAlpha = segment(progress, 0.26f, 0.5f) *
-                (1f - segment(progress, 0.8f, 1f))
+            val triangleAlpha = segment(progress, 0.15f, 0.30f) *
+                (1f - segment(progress, 0.85f, 1f))
             drawPath(polygon(scale, triangle, offsetX = 0f), cyan, alpha = triangleAlpha)
             drawPath(
                 polygon(scale, highlight, offsetX = 0f),

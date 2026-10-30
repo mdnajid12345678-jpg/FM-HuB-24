@@ -27,7 +27,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,10 +57,9 @@ import com.fmhub24.android.ui.components.LandscapeThumb
 import com.fmhub24.android.ui.components.LoadingState
 import com.fmhub24.android.ui.components.OfflineBanner
 import com.fmhub24.android.ui.components.PosterCard
-import com.fmhub24.android.ui.components.RemoteImage
 import com.fmhub24.android.ui.components.SectionHeader
+import com.fmhub24.android.ui.components.ThinProgress
 import com.fmhub24.android.ui.components.dataErrorMessage
-import com.fmhub24.android.ui.components.formatClock
 import com.fmhub24.android.ui.components.rememberOnline
 import com.fmhub24.android.ui.components.stringRes
 
@@ -185,51 +183,45 @@ private fun HomeContent(
             }
         }
 
-        // Continue watching: landscape thumbnails with a progress bar (spec 6.2).
+        // Continue watching: design shows a two-column grid of landscape thumbnails, each with a
+        // progress bar under the frame.
         if (state.continueWatching.isNotEmpty()) {
             item {
-                Column {
-                    SectionHeader(
-                        title = stringRes(R.string.section_continue_watching),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SectionHeader(title = stringRes(R.string.section_continue_watching))
                     Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(state.continueWatching, key = { it.key }) { entry ->
-                            val item = state.items.firstOrNull { it.id == entry.contentId }
-                            Column(
-                                modifier = Modifier
-                                    .width(190.dp)
-                                    .clickable {
-                                        if (item != null) onOpenDetails(item.id)
-                                    },
-                            ) {
-                                LandscapeThumb(
-                                    url = entry.posterUrl,
-                                    contentDescription = entry.title,
-                                    progress = entry.progress,
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    text = entry.title,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = if (entry.isEpisode) {
-                                        entry.episodeLabel
-                                    } else {
-                                        formatClock(entry.positionMs)
-                                    },
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                    state.continueWatching.chunked(2).forEach { pair ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            pair.forEach { entry ->
+                                val item = state.items.firstOrNull { it.id == entry.contentId }
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            if (item != null) onOpenDetails(item.id)
+                                        },
+                                ) {
+                                    LandscapeThumb(
+                                        url = entry.posterUrl,
+                                        contentDescription = entry.title,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Spacer(Modifier.height(5.dp))
+                                    ThinProgress(progress = entry.progress ?: 0f)
+                                    Spacer(Modifier.height(5.dp))
+                                    Text(
+                                        text = entry.title,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
                 }
@@ -238,7 +230,7 @@ private fun HomeContent(
 
         if (recent.isNotEmpty()) {
             item {
-                PosterRow(
+                PosterGrid(
                     title = stringRes(R.string.section_recently_added),
                     items = recent,
                     onOpenDetails = onOpenDetails,
@@ -270,72 +262,67 @@ private fun HomeContent(
     }
 }
 
+/** Design `.ban` + `.pg`: a flat accent banner with the title left and a play glyph right. */
 @Composable
 private fun FeaturedBanner(item: MediaItem, onClick: () -> Unit) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(210.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick),
+            .height(88.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        RemoteImage(
-            url = item.posterUrl,
-            contentDescription = item.title,
-            modifier = Modifier.fillMaxSize(),
+        if (item.isLive) {
+            com.fmhub24.android.ui.components.LiveBadge()
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(
+            text = item.title,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color(0xE6000000)),
-                    ),
-                ),
+        Spacer(Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.Outlined.PlayArrow,
+            contentDescription = stringRes(R.string.action_play),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(26.dp),
         )
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp),
-        ) {
-            if (item.isLive) {
-                com.fmhub24.android.ui.components.LiveBadge()
-                Spacer(Modifier.height(8.dp))
-            }
-            Text(
-                text = item.title,
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(50),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.PlayArrow,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = stringRes(R.string.action_play),
-                            color = Color.White,
-                            fontSize = 13.sp,
-                        )
-                    }
+    }
+}
+
+/** Design `.pg`: a three-column poster grid under a bold heading. */
+@Composable
+private fun PosterGrid(
+    title: String,
+    items: List<MediaItem>,
+    onOpenDetails: (String) -> Unit,
+    onSeeAll: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionHeader(title = title, onSeeAll = onSeeAll)
+        Spacer(Modifier.height(10.dp))
+        items.take(6).chunked(3).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowItems.forEach { item ->
+                    PosterCard(
+                        item = item,
+                        onClick = { onOpenDetails(item.id) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
+                repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

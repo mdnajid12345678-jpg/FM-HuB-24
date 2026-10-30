@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
@@ -45,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -172,6 +174,7 @@ fun DownloadsScreen(
                                 onRetry = { viewModel.retryRow(row) },
                                 onDelete = { confirmDelete = row },
                                 onMenu = { menuFor = row },
+                                onLongPress = { selection = setOf(row.record.id) },
                             )
                         } else {
                             SelectableRow(row = row, selection = selection) { id ->
@@ -183,8 +186,7 @@ fun DownloadsScreen(
 
                 groups.forEach { (contentId, groupRows) ->
                     val representative = groupRows.first()
-                    item(key = "group-$contentId") {
-                        if (selection.isEmpty()) {
+                    item(key = "group-$contentId") {                        if (selection.isEmpty()) {
                             GroupRow(
                                 row = representative,
                                 episodeCount = groupRows.size,
@@ -193,6 +195,9 @@ fun DownloadsScreen(
                                 onMenu = {
                                     menuFor = groupRows.firstOrNull { it.record.episodeKey == null }
                                         ?: representative
+                                },
+                                onLongPress = {
+                                    selection = groupRows.map { it.record.id }.toSet()
                                 },
                             )
                         } else {
@@ -209,6 +214,20 @@ fun DownloadsScreen(
                                 else selection + ids.toSet()
                             }
                         }
+                    }
+                }
+
+                if (selection.isEmpty()) {
+                    item(key = "long-press-hint") {
+                        Text(
+                            text = stringRes(R.string.design_hint_multi_select),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                        )
                     }
                 }
             }
@@ -232,9 +251,11 @@ fun DownloadsScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                     )
+                    Spacer(Modifier.width(12.dp))
                     DangerButton(
                         text = stringRes(R.string.delete_with_size, formatBytes(totalSelected)),
                         onClick = { selectedRows.firstOrNull()?.let { confirmDelete = it } },
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -290,19 +311,27 @@ private fun MovieRow(
     onRetry: () -> Unit,
     onDelete: () -> Unit,
     onMenu: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onOpen, onLongClick = onMenu),
+            .combinedClickable(onClick = onOpen, onLongClick = onLongPress),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.width(84.dp)) {
-            LandscapeThumb(
+        Box(modifier = Modifier.width(44.dp)) {
+            RemoteImage(
                 url = row.record.posterUrl,
                 contentDescription = row.record.title,
-                progress = if (row.isInProgress) row.percent else null,
+                aspectRatio = 2f / 3f,
+                modifier = Modifier.fillMaxWidth(),
             )
+            if (row.isInProgress) {
+                ThinProgress(
+                    progress = row.percent,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -396,6 +425,7 @@ private fun GroupRow(
     totalBytes: Long,
     onClick: () -> Unit,
     onMenu: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -423,7 +453,7 @@ private fun GroupRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .combinedClickable(onClick = onClick, onLongClick = onMenu),
+                .combinedClickable(onClick = onClick, onLongClick = onLongPress),
         ) {
             Text(
                 text = row.record.title,
@@ -578,8 +608,8 @@ private fun GroupDetail(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    Icons.Outlined.Close,
-                    contentDescription = stringRes(R.string.action_close),
+                    Icons.Outlined.ArrowBack,
+                    contentDescription = stringRes(R.string.action_back),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
@@ -592,15 +622,23 @@ private fun GroupDetail(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        Text(
+            text = stringRes(R.string.season_with_episodes, rows.size) + " · " +
+                formatBytes(rows.sumOf { it.sizeBytes ?: 0L }),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
 
-        if (seasons.size > 1) {
+        if (seasons.isNotEmpty()) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(seasons) { value ->
+                    val count = rows.count { it.record.seasonNumber == value }
                     com.fmhub24.android.ui.components.SelectChip(
-                        text = stringRes(R.string.season_number, value),
+                        text = "${stringRes(R.string.season_number, value)} ($count)",
                         selected = value == current,
                         onClick = { season = value },
                     )

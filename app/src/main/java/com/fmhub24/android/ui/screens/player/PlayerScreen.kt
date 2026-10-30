@@ -14,6 +14,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import com.fmhub24.android.ui.components.DesignChip
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -732,47 +736,78 @@ private fun LanguageServerPanel(
     onServer: (String) -> Unit,
     onReport: () -> Unit,
 ) {
+    // Design `.pn`: three tabs (Language / Server / Quality) above the list, rows on the
+    // elevated surface with the selected one on a translucent accent.
+    var tab by remember { mutableStateOf(0) }
+    val tabLabels = listOf(
+        stringRes(R.string.sheet_languages),
+        stringRes(R.string.sheet_servers),
+        stringRes(R.string.chip_quality),
+    )
+
     Column(modifier = Modifier.padding(14.dp)) {
-        Text(
-            text = stringRes(R.string.sheet_languages),
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.7f),
-        )
-        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            state.languages.take(3).forEach { language ->
-                SelectChip(
-                    text = SourceSelection.languageLabel(language, false),
-                    selected = language == state.languageKey,
-                    onClick = { onLanguage(language) },
+            tabLabels.forEachIndexed { index, label ->
+                DesignChip(
+                    text = label,
+                    selected = tab == index,
+                    onClick = { tab = index },
                 )
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = stringRes(R.string.sheet_servers),
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.7f),
-        )
-        Spacer(Modifier.height(6.dp))
-        state.alternatives.take(8).forEach { server ->
-            val supported = CodecSupport.isSupported(server.codec)
-            val line = listOfNotNull(
-                server.serverLabel,
-                SourceSelection.qualityLabel(server.quality),
-                server.codecLabel,
-            ).joinToString(" · ")
-            Text(
-                text = if (supported) line
-                else "$line · ${stringRes(R.string.unsupported_on_phone)}",
-                fontSize = 12.sp,
-                color = if (supported) Color.White else Color.White.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = supported) { onServer(server.serverLabel) }
-                    .padding(vertical = 7.dp),
-            )
+        Spacer(Modifier.height(12.dp))
+        when (tab) {
+            0 -> {
+                Text(
+                    text = stringRes(R.string.sheet_languages),
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                )
+                Spacer(Modifier.height(6.dp))
+                state.languages.take(4).forEach { language ->
+                    PanelRow(
+                        label = SourceSelection.languageLabel(language, false),
+                        trailing = null,
+                        selected = language == state.languageKey,
+                        onClick = { onLanguage(language) },
+                    )
+                }
+            }
+            1 -> {
+                state.alternatives.take(8).forEach { server ->
+                    val supported = CodecSupport.isSupported(server.codec)
+                    PanelRow(
+                        label = listOfNotNull(
+                            server.serverLabel,
+                            SourceSelection.qualityLabel(server.quality),
+                            server.codecLabel,
+                        ).joinToString(" · "),
+                        trailing = if (supported) null
+                        else stringRes(R.string.unsupported_on_phone),
+                        selected = server.serverLabel == state.source?.serverLabel,
+                        supported = supported,
+                        onClick = { onServer(server.serverLabel) },
+                    )
+                }
+            }
+            else -> {
+                state.alternatives
+                    .groupBy { SourceSelection.qualityLabel(it.quality) }
+                    .forEach { (quality, servers) ->
+                        val supported = servers.any { CodecSupport.isSupported(it.codec) }
+                        val target = servers.firstOrNull { CodecSupport.isSupported(it.codec) }
+                            ?: servers.first()
+                        PanelRow(
+                            label = quality,
+                            trailing = if (supported) null
+                            else stringRes(R.string.unsupported_on_phone),
+                            selected = servers.any { it.serverLabel == state.source?.serverLabel },
+                            supported = supported,
+                            onClick = { onServer(target.serverLabel) },
+                        )
+                    }
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -782,6 +817,64 @@ private fun LanguageServerPanel(
             color = Color(0xFF3EA6FF),
             modifier = Modifier.clickable(onClick = onReport),
         )
+    }
+}
+
+/** Design `.r` row inside the player settings panel. */
+@Composable
+private fun PanelRow(
+    label: String,
+    trailing: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+    supported: Boolean = true,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (selected && supported) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                } else {
+                    Color.White.copy(alpha = 0.06f)
+                },
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected && supported) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.White.copy(alpha = 0.12f)
+                },
+                shape = RoundedCornerShape(10.dp),
+            )
+            .alpha(if (supported) 1f else 0.45f)
+            .clickable(enabled = supported, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = if (selected && supported) {
+                Color(0xFFBFD8FF)
+            } else {
+                Color.White
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = trailing,
+                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.45f),
+            )
+        }
     }
 }
 
