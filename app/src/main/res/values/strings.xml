@@ -16,4 +16,257 @@
     <string name="theme_system">System</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
+
+    <!-- Navigation -->
+    <string name="tab_home">Home</string>
+    <string name="tab_live">Live</string>
+    <string name="tab_explore">Explore</string>
+    <string name="tab_downloads">Downloads</string>
+    <string name="tab_profile">Profile</string>
+    <string name="action_search">Search</string>
+    <string name="action_back">Back</string>
+    <string name="action_close">Close</string>
+    <string name="action_share">Share</string>
+    <string name="action_filter">Filters</string>
+    <string name="action_see_all">See all</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_done">Done</string>
+    <string name="action_ok">OK</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_download">Download</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="category_all">All</string>
+    <string name="category_movies">Movies</string>
+    <string name="category_series">Series</string>
+    <string name="category_anime">Anime</string>
+    <string name="section_continue_watching">Continue watching</string>
+    <string name="section_recently_added">Recently added</string>
+    <string name="section_movies">Movies</string>
+    <string name="section_series">Series</string>
+    <string name="section_anime">Anime</string>
+    <string name="section_live_tv">Live TV</string>
+    <string name="section_documentary">Documentary</string>
+    <string name="empty_home_title">Nothing here yet</string>
+    <string name="empty_home_detail">The catalog has no titles in this category.</string>
+    <string name="empty_continue_title">Nothing in progress</string>
+    <string name="empty_continue_detail">Titles you start watching will show up here.</string>
+    <string name="featured_label">Featured</string>
+    <string name="play_icon">Play</string>
+
+    <!-- System states -->
+    <string name="state_offline">You are offline. Downloads still work.</string>
+    <string name="state_network_error">Could not reach the server.</string>
+    <string name="state_content_unavailable">This title is no longer available.</string>
+    <string name="state_maintenance">The service is under maintenance. Please try again later.</string>
+    <string name="state_not_configured">The catalog is not configured on this build yet.</string>
+    <string name="state_rls_blocked">The database refused this read (RLS blocks reads).</string>
+    <string name="state_auth_failed">Could not sign in anonymously to read the catalog.</string>
+    <string name="state_load_failed">Something went wrong while loading.</string>
+    <string name="go_to_downloads">Open Downloads</string>
+
+    <!-- Playback failures -->
+    <string name="no_playable_source">There is no playable source yet.</string>
+    <string name="link_expired">The link expired and needs a refresh.</string>
+    <string name="playback_failed">This video could not be played.</string>
+    <string name="other_servers">Other servers</string>
+    <string name="try_now">Try now</string>
+    <string name="report_problem">Report a problem</string>
+    <string name="report_title">What is wrong?</string>
+    <string name="report_reason_broken">Video does not play</string>
+    <string name="report_reason_language">Wrong language or dub</string>
+    <string name="report_reason_audio">No sound</string>
+    <string name="report_reason_quality">Quality is wrong</string>
+    <string name="report_reason_other">Something else</string>
+    <string name="report_send">Send</string>
+    <string name="report_not_connected">Reporting is not connected yet, so nothing was sent.</string>
+
+    <!-- Details -->
+    <string name="details_add_to_list">Add to My list</string>
+    <string name="details_in_my_list">In My list</string>
+    <string name="details_similar">Similar</string>
+    <string name="details_more">More</string>
+    <string name="details_less">Less</string>
+    <string name="language_server_button">Language and server</string>
+    <string name="sheet_languages">Language</string>
+    <string name="sheet_servers">Server</string>
+    <string name="recommended">Recommended</string>
+    <string name="auto_option">Auto</string>
+    <string name="unsupported_on_phone">This phone cannot play it</string>
+    <string name="checking_source">Checking available options</string>
+    <string name="download_checking">Checking</string>
+    <string name="download_in_progress">Downloading %1$d%%</string>
+    <string name="download_completed">Downloaded</string>
+    <string name="download_paused">Paused</string>
+    <string name="download_failed">Download failed</string>
+    <string name="download_retry">Retry</string>
+    <string name="no_seasons">No seasons yet</string>
+    <string name="no_episodes">No episodes yet</string>
+
+    <!-- Series -->
+    <string name="play_first_episode">Play S%1$d E%1$d</string>
+    <string name="play_episode">Play S%1$d E%2$d</string>
+    <string name="continue_episode">Continue S%1$d E%2$d</string>
+    <string name="select_season">Select season</string>
+    <string name="season_number">Season %1$d</string>
+    <string name="season_with_episodes">%1$d episodes</string>
+    <string name="episode_number">E%1$d</string>
+    <string name="watched">Watched</string>
+    <string name="time_left">%1$s left</string>
+    <string name="select_all">Select all</string>
+    <string name="quality_label">Quality</string>
+    <string name="audio_label">Audio</string>
+    <string name="total_size">Total size</string>
+    <string name="free_space">Free space</string>
+    <string name="download_n_episodes">Download %1$d episodes</string>
+    <string name="season_download_title">Download season</string>
+
+    <!-- Player -->
+    <string name="player_back_10">Back 10 seconds</string>
+    <string name="player_forward_10">Forward 10 seconds</string>
+    <string name="player_seek_badge">10 sec</string>
+    <string name="chip_episodes">Episodes</string>
+    <string name="chip_language">Language</string>
+    <string name="chip_quality">Quality</string>
+    <string name="chip_speed">Speed</string>
+    <string name="cast_coming_soon">Cast is not connected yet.</string>
+    <string name="chip_lock">Lock</string>
+    <string name="player_locked">Press and hold to unlock</string>
+    <string name="player_brightness">Brightness</string>
+    <string name="player_volume">Volume</string>
+    <string name="player_next_episode">Next episode</string>
+    <string name="player_skip_intro">Skip intro</string>
+    <string name="resume_title">Continue watching?</string>
+    <string name="resume_at">Resume from %1$s</string>
+    <string name="start_over">Start over</string>
+    <string name="player_speed_value">%1$s×</string>
+    <string name="player_no_subtitles">Subtitles</string>
+    <string name="subtitles_off">Off</string>
+    <string name="text_size_small">Small</string>
+    <string name="text_size_medium">Medium</string>
+    <string name="text_size_large">Large</string>
+    <string name="quality_auto">Auto</string>
+    <string name="audio_tracks">Audio tracks</string>
+
+    <!-- Downloads -->
+    <string name="downloads_storage_used">Storage used: %1$s</string>
+    <string name="empty_downloads_title">No downloads yet</string>
+    <string name="empty_downloads_detail">Downloaded titles play offline.</string>
+    <string name="browse_action">Browse</string>
+    <string name="selection_mode_count">%1$d selected</string>
+    <string name="delete_with_size">Delete (%1$s)</string>
+    <string name="delete_confirm_title">Delete this download?</string>
+    <string name="delete_confirm_message">It will be removed from this phone. %1$s will be freed.</string>
+    <string name="delete_confirm_generic">It will be removed from this phone.</string>
+    <string name="menu_play">Play</string>
+    <string name="menu_details">Details</string>
+    <string name="menu_delete">Delete</string>
+    <string name="menu_delete_season">Delete season</string>
+    <string name="storage_bar_label">Storage</string>
+    <string name="wifi_only">Download on Wi-Fi only</string>
+    <string name="default_quality">Default quality</string>
+    <string name="quality_ask">Ask each time</string>
+    <string name="preferred_audio">Preferred audio</string>
+    <string name="simultaneous_downloads">Simultaneous downloads</string>
+    <string name="delete_after_watching">Delete after watching</string>
+    <string name="checking_options">Checking available options</string>
+    <string name="size_approximate">about %1$s</string>
+    <string name="size_unknown">Size unknown</string>
+    <string name="best_badge">Best</string>
+    <string name="low_storage_title">Not enough space</string>
+    <string name="low_storage_message">Needs %1$s, only %2$s free.</string>
+    <string name="manage_action">Manage</string>
+    <string name="audio_track_all">All audio tracks</string>
+    <string name="pick_audio_tracks">Audio tracks</string>
+    <string name="download_started">Download started</string>
+    <string name="notification_channel_downloads">Downloads</string>
+    <string name="notification_rationale_title">Show download progress?</string>
+    <string name="notification_rationale_message">Downloads show their progress as a notification on this phone.</string>
+    <string name="not_now">Not now</string>
+    <string name="allow">Allow</string>
+    <string name="notification_permission_needed">Notification permission is needed to show download progress.</string>
+
+    <!-- Live TV -->
+    <string name="live_title">Live TV</string>
+    <string name="favorites_title">Favorite channels</string>
+    <string name="add_channel">Add channel</string>
+    <string name="favorite_action">Favorite</string>
+    <string name="unfavorite_action">Unfavorite</string>
+    <string name="server_button">Server</string>
+    <string name="other_channels">Other channels</string>
+    <string name="empty_live_title">No live channels</string>
+    <string name="empty_live_detail">Channels appear here once the catalog has them.</string>
+    <string name="empty_favorites_title">No favorite channels</string>
+    <string name="empty_favorites_detail">Star a channel to keep it here.</string>
+    <string name="channels_side_panel">Channels</string>
+    <string name="live_badge">LIVE</string>
+
+    <!-- Profile -->
+    <string name="my_list_title">My list</string>
+    <string name="history_title">History</string>
+    <string name="playback_title">Playback</string>
+    <string name="download_settings_title">Download settings</string>
+    <string name="about_title">About</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="clear_history">Clear history</string>
+    <string name="clear_history_confirm">Remove all watch history from this phone?</string>
+    <string name="clear_search_history">Clear all</string>
+    <string name="remove_item">Remove</string>
+    <string name="recent_searches">Recent searches</string>
+    <string name="popular_searches">Popular</string>
+    <string name="search_hint">Search movies, series, anime</string>
+    <string name="empty_my_list_title">Your list is empty</string>
+    <string name="empty_my_list_detail">Add titles from their details page.</string>
+    <string name="empty_history_title">Nothing watched yet</string>
+    <string name="empty_history_detail">Videos you watch show up here.</string>
+    <string name="empty_search_title">Nothing found</string>
+    <string name="empty_search_message">Nothing found for “%1$s”.</string>
+    <string name="empty_search_hint">Check the spelling or try another word.</string>
+    <string name="suggestions_label">Suggestions</string>
+    <string name="remove_query">Remove search</string>
+
+    <!-- About / sharing / updates -->
+    <string name="about_version">Version %1$s</string>
+    <string name="check_updates">Check for updates</string>
+    <string name="share_app">Share app</string>
+    <string name="contact_us">Contact us</string>
+    <string name="privacy_policy">Privacy policy</string>
+    <string name="terms_disclaimer">Terms and disclaimer</string>
+    <string name="terms_text">Content is provided by third-party sources. The owner is responsible for having the right to distribute it. Removal requests are honored.</string>
+    <string name="share_text_title">Watch “%1$s” free on FMHuB24</string>
+    <string name="share_text_app">FMHuB24 — movies, series, anime and live TV. JUST WATCH FREE.</string>
+    <string name="share_link_label">Download link</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_message">A newer version of FMHuB24 is ready.</string>
+    <string name="update_now">Update now</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading update %1$d%%</string>
+    <string name="update_forced_title">Please update</string>
+    <string name="update_forced_message">This version can no longer be used. Update to continue.</string>
+    <string name="install_permission_title">Allow installs from this app</string>
+    <string name="install_permission_step1">Open Settings when asked.</string>
+    <string name="install_permission_step2">Turn on Allow from this source.</string>
+    <string name="install_permission_step3">Come back and install the update.</string>
+    <string name="open_settings">Open settings</string>
+
+    <!-- Filters -->
+    <string name="filter_type">Type</string>
+    <string name="filter_genre">Genre</string>
+    <string name="filter_year">Year</string>
+    <string name="filter_language">Language</string>
+    <string name="filter_reset">Reset</string>
+    <string name="filter_show_results">Show %1$d results</string>
+    <string name="sort_newest">Newest</string>
+    <string name="sort_recent">Recently added</string>
+    <string name="sort_az">A–Z</string>
+    <string name="type_other">Other</string>
+    <string name="any_value">Any</string>
+    <string name="year_from">From</string>
+    <string name="year_to">To</string>
 </resources>

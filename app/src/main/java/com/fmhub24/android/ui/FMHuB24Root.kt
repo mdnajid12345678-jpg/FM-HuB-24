@@ -1,5 +1,10 @@
 package com.fmhub24.android.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -10,23 +15,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,17 +40,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.compose.rememberNavController
 import com.fmhub24.android.R
 import com.fmhub24.android.data.ThemeMode
+import com.fmhub24.android.ui.navigation.FmHubApp
 import com.fmhub24.android.ui.theme.FMHuB24Theme
 import kotlinx.coroutines.delay
 
@@ -59,12 +59,17 @@ private const val LANGUAGE_SYSTEM = ""
 private const val LANGUAGE_ENGLISH = "en"
 private const val LANGUAGE_BENGALI = "bn"
 
+/**
+ * App root: splash, first-run language picker, the notification permission explainer before the
+ * system prompt (spec 6.1), then the five-tab shell.
+ */
 @Composable
 fun FMHuB24Root(
     viewModel: PreferencesViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsState()
     var introComplete by rememberSaveable { mutableStateOf(false) }
+    var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         delay(2_600)
@@ -72,7 +77,6 @@ fun FMHuB24Root(
     }
 
     // Applies the stored preference after every launch and after each change.
-    // An empty tag means "follow the system language".
     LaunchedEffect(settings?.languageTag) {
         val requested = settings?.languageTag ?: return@LaunchedEffect
         val target = if (requested.isEmpty()) {
@@ -92,19 +96,51 @@ fun FMHuB24Root(
             settings?.languageTag == null -> LanguagePickerScreen(
                 onContinue = { languageTag -> viewModel.chooseLanguage(languageTag) },
             )
-            else -> HomeFoundationScreen(
-                languageTag = settings?.languageTag ?: LANGUAGE_SYSTEM,
-                themeMode = settings?.theme ?: ThemeMode.DARK,
-                onLanguageSelected = viewModel::chooseLanguage,
-                onThemeSelected = viewModel::chooseTheme,
-            )
+            else -> {
+                val context = LocalContext.current
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission(),
+                ) { granted -> viewModel.markNotificationRationaleSeen() }
+
+                // Explainer before the system prompt (spec 6.1).
+                LaunchedEffect(Unit) {
+                    if (settings?.notificationRationaleShown == false) {
+                        showNotificationRationale = true
+                    }
+                }
+
+                if (showNotificationRationale) {
+                    NotificationRationaleDialog(
+                        onNotNow = {
+                            showNotificationRationale = false
+                            viewModel.markNotificationRationaleSeen()
+                        },
+                        onAllow = {
+                            showNotificationRationale = false
+                            viewModel.markNotificationRationaleSeen()
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                context.checkSelfPermission(
+                                    Manifest.permission.POST_NOTIFICATIONS,
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        },
+                    )
+                }
+
+                val navController = rememberNavController()
+                FmHubApp(navController = navController)
+            }
         }
     }
 }
 
 @Composable
 private fun SplashScreen() {
-    val eightDp = with(LocalDensity.current) { 8.dp.roundToPx() }
+    val eightDp = with(androidx.compose.ui.platform.LocalDensity.current) {
+        8.dp.roundToPx()
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -232,128 +268,26 @@ private fun LanguagePickerScreen(onContinue: (String) -> Unit) {
     }
 }
 
+/** Explainer shown before Android's own notification permission prompt (spec 6.1). */
 @Composable
-private fun HomeFoundationScreen(
-    languageTag: String,
-    themeMode: ThemeMode,
-    onLanguageSelected: (String) -> Unit,
-    onThemeSelected: (ThemeMode) -> Unit,
+private fun NotificationRationaleDialog(
+    onNotNow: () -> Unit,
+    onAllow: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.app_name),
-            color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.home_subtitle),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(Modifier.height(28.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Movie,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.secondary,
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.catalog_not_connected),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.catalog_not_connected_detail),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onNotNow,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(stringResource(R.string.notification_rationale_title)) },
+        text = { Text(stringResource(R.string.notification_rationale_message)) },
+        confirmButton = {
+            TextButton(onClick = onAllow) {
+                Text(stringResource(R.string.allow))
             }
-        }
-
-        Spacer(Modifier.height(28.dp))
-        SettingsRow(
-            title = stringResource(R.string.appearance_title),
-            options = listOf(
-                ThemeMode.SYSTEM to stringResource(R.string.theme_system),
-                ThemeMode.LIGHT to stringResource(R.string.theme_light),
-                ThemeMode.DARK to stringResource(R.string.theme_dark),
-            ),
-            selected = themeMode,
-            onSelect = onThemeSelected,
-        )
-
-        Spacer(Modifier.height(16.dp))
-        SettingsRow(
-            title = stringResource(R.string.language_title),
-            options = listOf(
-                LANGUAGE_SYSTEM to stringResource(R.string.app_language_follow_system),
-                LANGUAGE_ENGLISH to stringResource(R.string.language_english),
-                LANGUAGE_BENGALI to stringResource(R.string.language_bengali),
-            ),
-            selected = languageTag,
-            onSelect = onLanguageSelected,
-        )
-    }
-}
-
-@Composable
-private fun <T> SettingsRow(
-    title: String,
-    options: List<Pair<T, String>>,
-    selected: T,
-    onSelect: (T) -> Unit,
-) {
-    Text(
-        text = title,
-        color = MaterialTheme.colorScheme.onBackground,
-        style = MaterialTheme.typography.titleSmall,
+        },
+        dismissButton = {
+            TextButton(onClick = onNotNow) {
+                Text(stringResource(R.string.not_now))
+            }
+        },
     )
-    Spacer(Modifier.height(4.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        options.forEach { (option, label) ->
-            TextButton(
-                onClick = { onSelect(option) },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = if (selected == option) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                ),
-            ) {
-                Text(text = label, fontSize = 11.sp, maxLines = 1)
-            }
-        }
-    }
 }

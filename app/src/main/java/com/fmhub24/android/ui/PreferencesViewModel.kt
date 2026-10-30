@@ -25,11 +25,29 @@ class PreferencesViewModel @Inject constructor(
             initialValue = null,
         )
 
-    fun chooseLanguage(languageTag: String) {
-        viewModelScope.launch { repository.saveLanguage(languageTag) }
+    fun chooseLanguage(languageTag: String) = launch { repository.saveLanguage(languageTag) }
+
+    fun chooseTheme(theme: ThemeMode) = launch { repository.saveTheme(theme) }
+
+    fun setWifiOnly(enabled: Boolean) = launch { repository.saveWifiOnly(enabled) }
+
+    fun setDefaultQuality(quality: String) = launch { repository.saveDefaultQuality(quality) }
+
+    fun setPreferredAudio(language: String?) = launch { repository.savePreferredAudio(language) }
+
+    fun setSimultaneousDownloads(count: Int) = launch { repository.saveSimultaneousDownloads(count) }
+
+    fun setDeleteAfterWatching(enabled: Boolean) = launch {
+        repository.saveDeleteAfterWatching(enabled)
     }
 
-    fun chooseTheme(theme: ThemeMode) {
-        viewModelScope.launch { repository.saveTheme(theme) }
+    fun setSubtitleSize(size: String) = launch { repository.saveSubtitleSize(size) }
+
+    fun setPlaybackSpeed(speed: Float) = launch { repository.savePlaybackSpeed(speed) }
+
+    fun markNotificationRationaleSeen() = launch { repository.markNotificationRationaleSeen() }
+
+    private fun launch(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
     }
 }

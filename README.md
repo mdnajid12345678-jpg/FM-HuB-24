@@ -4,9 +4,9 @@ Native Android streaming app (Kotlin, Jetpack Compose, Material 3) built from th
 FMHuB24 Android Streaming App Build Specification. Android only, distributed as a
 direct APK; backend is Supabase, read-only, anonymous sign-in.
 
-## Current status (stage 1)
+## Current status (all build-order stages implemented)
 
-Implemented (build order step 1):
+Stage 1 — shell:
 
 - Project setup: AGP 9.3, Kotlin 2.4, Hilt, Room, Media3, Coil, Supabase Kotlin SDK.
 - Custom theme with the exact specification palette: Dark (default), Light, System.
@@ -15,11 +15,33 @@ Implemented (build order step 1):
 - Android system splash (static mark) + in-app splash with wordmark and tagline.
 - First-run language picker (বাংলা / English), persisted per-app language, and
   appearance/language settings rows.
-- Honest empty state: the catalog is **not connected yet**, so the home screen
-  shows that message instead of any sample or placeholder titles.
 
-Not built yet (later stages): catalog sync, Home rows, Explore/Search, details,
-player, series, downloads, Live TV, Profile/About, update dialogs.
+Stage 2 — data layer:
+
+- Supabase PostgREST client (anon key + anonymous sign-in only, never a
+  `service_role` key), token refresh and session persistence.
+- Room cache for the catalog; `media_sources` is **never** cached — it is always
+  read live, filtered to `status = 'resolved'`, and resolved per request with its
+  `headers` (Referer/User-Agent).
+- Repositories for catalog, sources, watch state and downloads; user
+  preferences (downloads, playback, language, appearance).
+
+Stages 3–7 — screens:
+
+- Home rows ("Recently added" — the catalog has no popularity field), Explore
+  with filters, Search, See-all, Details with seasons/episodes and source picker.
+- Player: Media3 playback on a `SurfaceView` with Compose overlays, source
+  switching on failure, track selection, and honest failure states (expired link,
+  offline, blocked, report-sent) — `media_url` is never shown or shared.
+- Series, My List, History, Downloads (Media3 `DownloadService`, per-item
+  progress, delete), Live TV with categories and a channel player.
+- Profile/About, Settings (theme, language, downloads, playback), update
+  dialogs (fetches the release feed, shows an honest message when unavailable).
+- Every list has an empty state; report-sending states honestly that the
+  backend endpoint is not implemented yet.
+
+Verified locally: `assembleDebug` and `testDebugUnitTest` both pass (no unit
+test sources yet); CI builds the APK on every push to `main`.
 
 ## Building the APK on GitHub
 

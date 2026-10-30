@@ -16,4 +16,257 @@
     <string name="theme_system">সিস্টেম</string>
     <string name="theme_dark">ডার্ক</string>
     <string name="theme_light">লাইট</string>
+
+    <!-- Navigation -->
+    <string name="tab_home">হোম</string>
+    <string name="tab_live">লাইভ</string>
+    <string name="tab_explore">খুঁজুন</string>
+    <string name="tab_downloads">ডাউনলোড</string>
+    <string name="tab_profile">প্রোফাইল</string>
+    <string name="action_search">খুঁজুন</string>
+    <string name="action_back">পেছনে</string>
+    <string name="action_close">বন্ধ</string>
+    <string name="action_share">শেয়ার</string>
+    <string name="action_filter">ফিল্টার</string>
+    <string name="action_see_all">সব দেখুন</string>
+    <string name="action_clear">মুছুন</string>
+    <string name="action_retry">আবার চেষ্টা</string>
+    <string name="action_cancel">বাতিল</string>
+    <string name="action_done">ঠিক আছে</string>
+    <string name="action_ok">ঠিক আছে</string>
+    <string name="action_play">চালান</string>
+    <string name="action_pause">থামান</string>
+    <string name="action_download">ডাউনলোড</string>
+    <string name="action_delete">মুছুন</string>
+    <string name="action_settings">সেটিংস</string>
+
+    <!-- Home -->
+    <string name="category_all">সব</string>
+    <string name="category_movies">মুভি</string>
+    <string name="category_series">সিরিজ</string>
+    <string name="category_anime">অ্যানিমে</string>
+    <string name="section_continue_watching">দেখা চালিয়ে যান</string>
+    <string name="section_recently_added">সম্প্রতি যোগ হয়েছে</string>
+    <string name="section_movies">মুভি</string>
+    <string name="section_series">সিরিজ</string>
+    <string name="section_anime">অ্যানিমে</string>
+    <string name="section_live_tv">লাইভ টিভি</string>
+    <string name="section_documentary">তথ্যচিত্র</string>
+    <string name="empty_home_title">এখনো কিছু নেই</string>
+    <string name="empty_home_detail">এই ক্যাটাগরিতে ক্যাটালগে কোনো শিরোনাম নেই।</string>
+    <string name="empty_continue_title">কিছু অসমাপ্ত নেই</string>
+    <string name="empty_continue_detail">দেখা শুরু করা শিরোনাম এখানে আসবে।</string>
+    <string name="featured_label">ফিচার্ড</string>
+    <string name="play_icon">চালান</string>
+
+    <!-- System states -->
+    <string name="state_offline">আপনি অফলাইনে আছেন। ডাউনলোড কাজ করবে।</string>
+    <string name="state_network_error">সার্ভারে পৌঁছানো যায়নি।</string>
+    <string name="state_content_unavailable">এই শিরোনামটি আর পাওয়া যাচ্ছে না।</string>
+    <string name="state_maintenance">সেবাটি রক্ষণাবেক্ষণে আছে। পরে আবার চেষ্টা করুন।</string>
+    <string name="state_not_configured">এই বিল্ডে ক্যাটালগ কনফিগার করা হয়নি।</string>
+    <string name="state_rls_blocked">ডাটাবেস এই পড়া প্রত্যাখ্যান করেছে (RLS blocks reads)।</string>
+    <string name="state_auth_failed">ক্যাটালগ পড়ার জন্য অ্যাননিমাস সাইন-ইন করা যায়নি।</string>
+    <string name="state_load_failed">লোড করার সময় কিছু একটা সমস্যা হয়েছে।</string>
+    <string name="go_to_downloads">ডাউনলোড খুলুন</string>
+
+    <!-- Playback failures -->
+    <string name="no_playable_source">এখনো কোনো চলার মতো সোর্স নেই।</string>
+    <string name="link_expired">লিংকের মেয়াদ শেষ, রিফ্রেশ দরকার।</string>
+    <string name="playback_failed">এই ভিডিওটি চালানো যায়নি।</string>
+    <string name="other_servers">অন্য সার্ভার</string>
+    <string name="try_now">এখনই চেষ্টা</string>
+    <string name="report_problem">সমস্যা জানান</string>
+    <string name="report_title">কী সমস্যা?</string>
+    <string name="report_reason_broken">ভিডিও চলছে না</string>
+    <string name="report_reason_language">ভাষা বা ডাব ভুল</string>
+    <string name="report_reason_audio">শব্দ নেই</string>
+    <string name="report_reason_quality">কোয়ালিটি ঠিক নয়</string>
+    <string name="report_reason_other">অন্য কিছু</string>
+    <string name="report_send">পাঠান</string>
+    <string name="report_not_connected">রিপোর্ট পাঠানোর সংযোগ এখনো নেই, কিছু পাঠানো হয়নি।</string>
+
+    <!-- Details -->
+    <string name="details_add_to_list">আমার তালিকায় যোগ করুন</string>
+    <string name="details_in_my_list">আমার তালিকায় আছে</string>
+    <string name="details_similar">মিলিয়ে যায়</string>
+    <string name="details_more">আরও</string>
+    <string name="details_less">কম</string>
+    <string name="language_server_button">ভাষা ও সার্ভার</string>
+    <string name="sheet_languages">ভাষা</string>
+    <string name="sheet_servers">সার্ভার</string>
+    <string name="recommended">সুপারিশকৃত</string>
+    <string name="auto_option">অটো</string>
+    <string name="unsupported_on_phone">এই ফোনে চলবে না</string>
+    <string name="checking_source">অপশন যাচাই হচ্ছে</string>
+    <string name="download_checking">যাচাই হচ্ছে</string>
+    <string name="download_in_progress">ডাউনলোড হচ্ছে %1$d%%</string>
+    <string name="download_completed">ডাউনলোড হয়েছে</string>
+    <string name="download_paused">থামানো</string>
+    <string name="download_failed">ডাউনলোড ব্যর্থ</string>
+    <string name="download_retry">আবার চেষ্টা</string>
+    <string name="no_seasons">এখনো কোনো সিজন নেই</string>
+    <string name="no_episodes">এখনো কোনো পর্ব নেই</string>
+
+    <!-- Series -->
+    <string name="play_first_episode">S%1$d E%1$d চালান</string>
+    <string name="play_episode">S%1$d E%2$d চালান</string>
+    <string name="continue_episode">S%1$d E%2$d চালিয়ে যান</string>
+    <string name="select_season">সিজন বেছে নিন</string>
+    <string name="season_number">সিজন %1$d</string>
+    <string name="season_with_episodes">%1$dটি পর্ব</string>
+    <string name="episode_number">E%1$d</string>
+    <string name="watched">দেখা হয়েছে</string>
+    <string name="time_left">%1$s বাকি</string>
+    <string name="select_all">সব নির্বাচন</string>
+    <string name="quality_label">কোয়ালিটি</string>
+    <string name="audio_label">অডিও</string>
+    <string name="total_size">মোট আকার</string>
+    <string name="free_space">ফাঁকা জায়গা</string>
+    <string name="download_n_episodes">%1$dটি পর্ব ডাউনলোড</string>
+    <string name="season_download_title">সিজন ডাউনলোড</string>
+
+    <!-- Player -->
+    <string name="player_back_10">১০ সেকেন্ড পেছনে</string>
+    <string name="player_forward_10">১০ সেকেন্ড সামনে</string>
+    <string name="player_seek_badge">১০ সে.</string>
+    <string name="chip_episodes">পর্ব</string>
+    <string name="chip_language">ভাষা</string>
+    <string name="chip_quality">কোয়ালিটি</string>
+    <string name="chip_speed">গতি</string>
+    <string name="cast_coming_soon">কাস্ট এখনো সংযুক্ত হয়নি।</string>
+    <string name="chip_lock">লক</string>
+    <string name="player_locked">খুলতে ধরে রাখুন</string>
+    <string name="player_brightness">উজ্জ্বলতা</string>
+    <string name="player_volume">ভলিউম</string>
+    <string name="player_next_episode">পরের পর্ব</string>
+    <string name="player_skip_intro">ইন্ট্রো বাদ</string>
+    <string name="resume_title">দেখা চালিয়ে যাবেন?</string>
+    <string name="resume_at">%1$s থেকে</string>
+    <string name="start_over">শুরু থেকে</string>
+    <string name="player_speed_value">%1$s×</string>
+    <string name="player_no_subtitles">সাবটাইটেল</string>
+    <string name="subtitles_off">বন্ধ</string>
+    <string name="text_size_small">ছোট</string>
+    <string name="text_size_medium">মাঝারি</string>
+    <string name="text_size_large">বড়</string>
+    <string name="quality_auto">অটো</string>
+    <string name="audio_tracks">অডিও ট্র্যাক</string>
+
+    <!-- Downloads -->
+    <string name="downloads_storage_used">ব্যবহৃত জায়গা: %1$s</string>
+    <string name="empty_downloads_title">এখনো কিছু নেই</string>
+    <string name="empty_downloads_detail">ডাউনলোড করা শিরোনাম অফলাইনে চলে।</string>
+    <string name="browse_action">দেখুন</string>
+    <string name="selection_mode_count">%1$dটি নির্বাচিত</string>
+    <string name="delete_with_size">মুছুন (%1$s)</string>
+    <string name="delete_confirm_title">এই ডাউনলোডটি মুছবেন?</string>
+    <string name="delete_confirm_message">এটি ফোন থেকে মুছে যাবে। %1$s ফাঁকা হবে।</string>
+    <string name="delete_confirm_generic">এটি ফোন থেকে মুছে যাবে।</string>
+    <string name="menu_play">চালান</string>
+    <string name="menu_details">বিস্তারিত</string>
+    <string name="menu_delete">মুছুন</string>
+    <string name="menu_delete_season">সিজন মুছুন</string>
+    <string name="storage_bar_label">স্টোরেজ</string>
+    <string name="wifi_only">শুধু ওয়াই-ফাইতে ডাউনলোড</string>
+    <string name="default_quality">ডিফল্ট কোয়ালিটি</string>
+    <string name="quality_ask">প্রতিবার জিজ্ঞেস করুন</string>
+    <string name="preferred_audio">পছন্দের অডিও</string>
+    <string name="simultaneous_downloads">একসাথে ডাউনলোড</string>
+    <string name="delete_after_watching">দেখার পর মুছে ফেলুন</string>
+    <string name="checking_options">অপশন যাচাই হচ্ছে</string>
+    <string name="size_approximate">আনুমানিক %1$s</string>
+    <string name="size_unknown">আকার জানা নেই</string>
+    <string name="best_badge">সেরা</string>
+    <string name="low_storage_title">পর্যাপ্ত জায়গা নেই</string>
+    <string name="low_storage_message">%1$s দরকার, মাত্র %2$s ফাঁকা।</string>
+    <string name="manage_action">ব্যবস্থা নিন</string>
+    <string name="audio_track_all">সব অডিও ট্র্যাক</string>
+    <string name="pick_audio_tracks">অডিও ট্র্যাক</string>
+    <string name="download_started">ডাউনলোড শুরু হয়েছে</string>
+    <string name="notification_channel_downloads">ডাউনলোড</string>
+    <string name="notification_rationale_title">ডাউনলোডের অগ্রগতি দেখাবে?</string>
+    <string name="notification_rationale_message">ডাউনলোডের অগ্রগতি এই ফোনে নোটিফিকেশন হিসেবে দেখানো হয়।</string>
+    <string name="not_now">এখন না</string>
+    <string name="allow">অনুমতি দিন</string>
+    <string name="notification_permission_needed">ডাউনলোড অগ্রগতি দেখাতে নোটিফিকেশন অনুমতি লাগবে।</string>
+
+    <!-- Live TV -->
+    <string name="live_title">লাইভ টিভি</string>
+    <string name="favorites_title">পছন্দের চ্যানেল</string>
+    <string name="add_channel">চ্যানেল যোগ</string>
+    <string name="favorite_action">পছন্দের</string>
+    <string name="unfavorite_action">পছন্দ থেকে সরান</string>
+    <string name="server_button">সার্ভার</string>
+    <string name="other_channels">অন্য চ্যানেল</string>
+    <string name="empty_live_title">কোনো লাইভ চ্যানেল নেই</string>
+    <string name="empty_live_detail">ক্যাটালগে চ্যানেল এলে এখানে আসবে।</string>
+    <string name="empty_favorites_title">কোনো পছন্দের চ্যানেল নেই</string>
+    <string name="empty_favorites_detail">চ্যানেলে স্টার দিন।</string>
+    <string name="channels_side_panel">চ্যানেল</string>
+    <string name="live_badge">লাইভ</string>
+
+    <!-- Profile -->
+    <string name="my_list_title">আমার তালিকা</string>
+    <string name="history_title">হিস্ট্রি</string>
+    <string name="playback_title">প্লেব্যাক</string>
+    <string name="download_settings_title">ডাউনলোড সেটিংস</string>
+    <string name="about_title">পরিচিতি</string>
+    <string name="history_today">আজ</string>
+    <string name="history_yesterday">গতকাল</string>
+    <string name="clear_history">হিস্ট্রি মুছুন</string>
+    <string name="clear_history_confirm">এই ফোনের সব দেখার হিস্ট্রি মুছে ফেলবেন?</string>
+    <string name="clear_search_history">সব মুছুন</string>
+    <string name="remove_item">সরান</string>
+    <string name="recent_searches">সাম্প্রতিক অনুসন্ধান</string>
+    <string name="popular_searches">জনপ্রিয়</string>
+    <string name="search_hint">মুভি, সিরিজ, অ্যানিমে খুঁজুন</string>
+    <string name="empty_my_list_title">আপনার তালিকা খালি</string>
+    <string name="empty_my_list_detail">শিরোনামের পেজ থেকে যোগ করুন।</string>
+    <string name="empty_history_title">এখনো কিছু দেখা হয়নি</string>
+    <string name="empty_history_detail">দেখা ভিডিও এখানে আসবে।</string>
+    <string name="empty_search_title">কিছু পাওয়া যায়নি</string>
+    <string name="empty_search_message">“%1$s” এর জন্য কিছু পাওয়া যায়নি।</string>
+    <string name="empty_search_hint">বানান দেখুন বা অন্য শব্দ চেষ্টা করুন।</string>
+    <string name="suggestions_label">পরামর্শ</string>
+    <string name="remove_query">অনুসন্ধান সরান</string>
+
+    <!-- About / sharing / updates -->
+    <string name="about_version">ভার্সন %1$s</string>
+    <string name="check_updates">আপডেট খুঁজুন</string>
+    <string name="share_app">অ্যাপ শেয়ার</string>
+    <string name="contact_us">যোগাযোগ</string>
+    <string name="privacy_policy">প্রাইভেসি পলিসি</string>
+    <string name="terms_disclaimer">শর্তাবলি ও দাবিত্যাগ</string>
+    <string name="terms_text">কনটেন্ট তৃতীয় পক্ষের সোর্স থেকে আসে। এটি বিতরণের অধিকার আছে কি না তার দায়িত্ব মালিকের। সরে দেওয়ার অনুরোধ মেনে নেওয়া হয়।</string>
+    <string name="share_text_title">FMHuB24-এ “%1$s” বিনামূল্যে দেখুন</string>
+    <string name="share_text_app">FMHuB24 — মুভি, সিরিজ, অ্যানিমে আর লাইভ টিভি। JUST WATCH FREE.</string>
+    <string name="share_link_label">ডাউনলোড লিংক</string>
+    <string name="update_available_title">আপডেট আছে</string>
+    <string name="update_available_message">FMHuB24-এর নতুন ভার্সন প্রস্তুত।</string>
+    <string name="update_now">এখনই আপডেট</string>
+    <string name="update_later">পরে</string>
+    <string name="update_downloading">আপডেট ডাউনলোড হচ্ছে %1$d%%</string>
+    <string name="update_forced_title">আপডেট করুন</string>
+    <string name="update_forced_message">এই ভার্সনটি আর ব্যবহার করা যাবে না। চালিয়ে যেতে আপডেট করুন।</string>
+    <string name="install_permission_title">এই অ্যাপ থেকে ইনস্টলের অনুমতি দিন</string>
+    <string name="install_permission_step1">চাইলে সেটিংস খুলুন।</string>
+    <string name="install_permission_step2">Allow from this source চালু করুন।</string>
+    <string name="install_permission_step3">ফিরে এসে আপডেট ইনস্টল করুন।</string>
+    <string name="open_settings">সেটিংস খুলুন</string>
+
+    <!-- Filters -->
+    <string name="filter_type">ধরন</string>
+    <string name="filter_genre">ধারা</string>
+    <string name="filter_year">সাল</string>
+    <string name="filter_language">ভাষা</string>
+    <string name="filter_reset">রিসেট</string>
+    <string name="filter_show_results">%1$dটি ফল দেখান</string>
+    <string name="sort_newest">নতুন</string>
+    <string name="sort_recent">সম্প্রতি যোগ</string>
+    <string name="sort_az">ক–য</string>
+    <string name="type_other">অন্য</string>
+    <string name="any_value">যেকোনো</string>
+    <string name="year_from">থেকে</string>
+    <string name="year_to">পর্যন্ত</string>
 </resources>
