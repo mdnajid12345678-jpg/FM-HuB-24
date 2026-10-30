@@ -163,8 +163,9 @@ fun DangerButton(
 }
 
 /**
- * Design chips (FMHuB24_Designs.html `.c`): 11sp label, 14dp radius, surface background with a
- * hairline border; the selected chip sits on a translucent accent with a #BFD8FF label.
+ * Design chips (FMHuB24_Designs.html `.c`): 12sp label, 14dp radius, surface background with a
+ * hairline border; the selected chip sits on a translucent accent with a #BFD8FF label. The
+ * padding keeps a comfortable touch height for tappable chips (season, category, filters).
  */
 private val ChipShape = RoundedCornerShape(14.dp)
 
@@ -225,12 +226,12 @@ fun DesignChip(
                 shape = shape,
             )
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .padding(horizontal = 9.dp, vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             maxLines = 1,
             color = if (selected) {
                 Color(0xFFBFD8FF)

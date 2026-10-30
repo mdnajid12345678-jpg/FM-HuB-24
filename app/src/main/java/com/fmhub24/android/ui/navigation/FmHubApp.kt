@@ -1,13 +1,9 @@
 package com.fmhub24.android.ui.navigation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
@@ -15,14 +11,18 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
@@ -94,32 +94,57 @@ private val tabs = listOf(
 )
 
 /**
- * Design `.nav`: a hairline-topped, text-only tab bar — 11sp labels, the active tab in the
- * brand light blue (#7DB0FF) and the rest at 45% white.
+ * The five-tab bar: a native Material navigation bar tinted with the design tokens — a hairline
+ * top edge, the active tab in the brand light blue (#7DB0FF) over a translucent accent indicator,
+ * the rest at 55% white, labels always visible, and the system navigation inset handled by the
+ * bar itself.
  */
 @Composable
 private fun DesignTabBar(currentRoute: String?, onNavigate: (String) -> Unit) {
-    Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+    val background = MaterialTheme.colorScheme.background
+    // The mockup's #7DB0FF is a dark-theme accent; on light backgrounds use the scheme primary.
+    val dark = background.luminance() < 0.5f
+    val activeColor = if (dark) Color(0xFF7DB0FF) else MaterialTheme.colorScheme.primary
+    val inactiveColor = if (dark) {
+        Color.White.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(modifier = Modifier.background(background)) {
         HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+        NavigationBar(
+            containerColor = background,
+            contentColor = inactiveColor,
+            tonalElevation = 0.dp,
         ) {
             tabs.forEach { tab ->
                 val selected = currentRoute == tab.route
-                Text(
-                    text = stringResource(tab.labelRes),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    color = if (selected) {
-                        Color(0xFF7DB0FF)
-                    } else {
-                        Color.White.copy(alpha = 0.45f)
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { onNavigate(tab.route) },
+                    icon = {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = stringResource(tab.labelRes),
+                            modifier = Modifier.size(22.dp),
+                        )
                     },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onNavigate(tab.route) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    label = {
+                        Text(
+                            text = stringResource(tab.labelRes),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
+                    },
+                    alwaysShowLabel = true,
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = activeColor,
+                        selectedTextColor = activeColor,
+                        unselectedIconColor = inactiveColor,
+                        unselectedTextColor = inactiveColor,
+                        indicatorColor = activeColor.copy(alpha = 0.18f),
+                    ),
                 )
             }
         }
@@ -170,7 +195,6 @@ fun FmHubApp(navController: NavHostController) {
             composable(Dest.EXPLORE) {
                 ExploreScreen(
                     onOpenDetails = { id -> navController.navigate(Dest.details(id)) },
-                    onOpenSearch = { navController.navigate(Dest.SEARCH) },
                 )
             }
             composable(Dest.DOWNLOADS) {

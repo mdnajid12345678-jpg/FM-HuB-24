@@ -260,6 +260,8 @@
     <string name="filter_genre">Genre</string>
     <string name="filter_year">Year</string>
     <string name="filter_language">Language</string>
+    <string name="filter_languages_loading">Reading available languages…</string>
+    <string name="filter_languages_none">No languages available yet</string>
     <string name="filter_reset">Reset</string>
     <string name="filter_show_results">Show %1$d results</string>
     <string name="sort_newest">Newest</string>

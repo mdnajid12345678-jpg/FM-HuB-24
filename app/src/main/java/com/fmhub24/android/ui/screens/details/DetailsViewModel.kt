@@ -29,6 +29,8 @@ data class DetailsUiState(
     val error: DataException? = null,
     val seasons: List<SeasonItem> = emptyList(),
     val episodes: List<EpisodeItem> = emptyList(),
+    /** The season whose episodes are listed; defaults to the watched one, then to the first. */
+    val selectedSeason: Int? = null,
     val inMyList: Boolean = false,
     val history: HistoryEntry? = null,
 )
@@ -68,9 +70,16 @@ class DetailsViewModel @Inject constructor(
         watchState.isInMyList(contentId),
         watchState.history,
     ) { current, inList, history ->
+        val watched = history.firstOrNull { entry -> entry.contentId == contentId }
+        val known = current.seasons.map { it.seasonNumber }
+        // Keep the season the user picked; otherwise open the one being watched, then the first.
+        val chosen = current.selectedSeason?.takeIf { it in known }
+            ?: watched?.takeIf { it.seasonNumber in known }?.seasonNumber
+            ?: known.firstOrNull()
         current.copy(
             inMyList = inList,
-            history = history.firstOrNull { entry -> entry.contentId == contentId },
+            history = watched,
+            selectedSeason = chosen,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DetailsUiState())
 
@@ -182,8 +191,18 @@ class DetailsViewModel @Inject constructor(
         viewModelScope.launch { watchState.toggleMyList(current) }
     }
 
-    fun episodesFor(seasonNumber: Int): List<EpisodeItem> =
-        base.value.episodes.filter { it.seasonNumber == seasonNumber }
+    /** Switches the listed episodes to another season (details season selector). */
+    fun selectSeason(seasonNumber: Int) {
+        if (base.value.seasons.none { it.seasonNumber == seasonNumber }) return
+        base.value = base.value.copy(selectedSeason = seasonNumber)
+    }
+
+    fun episodesFor(seasonNumber: Int?): List<EpisodeItem> =
+        if (seasonNumber == null) {
+            base.value.episodes
+        } else {
+            base.value.episodes.filter { it.seasonNumber == seasonNumber }
+        }
 
     fun firstEpisode(): EpisodeItem? = base.value.episodes.minByOrNull {
         it.seasonNumber * 10_000 + it.episodeNumber

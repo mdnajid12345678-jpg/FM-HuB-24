@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
@@ -164,7 +166,6 @@ fun DetailsScreen(
                                 onPlayContinue = { episode ->
                                     onPlay(item.id, episode?.key)
                                 },
-                                onSeasonPicker = { showSeasonSheet = true },
                                 onSeasonDownload = { showSeasonSheet = true },
                                 onRefreshSources = { viewModel.loadSources() },
                             )
@@ -213,17 +214,16 @@ fun DetailsScreen(
 
                 if (item.usesEpisodes) {
                     item {
-                        SeasonPickerRow(
+                        SeasonSelector(
                             seasons = state.seasons,
+                            selectedSeason = state.selectedSeason,
                             episodeCounts = state.episodes.groupingBy { it.seasonNumber }.eachCount(),
-                            onOpenSheet = { showSeasonSheet = true },
+                            onSelect = viewModel::selectSeason,
                         )
                     }
                     item {
                         EpisodeList(
-                            episodes = viewModel.episodesFor(
-                                state.seasons.firstOrNull()?.seasonNumber ?: 1,
-                            ),
+                            episodes = viewModel.episodesFor(state.selectedSeason),
                             history = state.history,
                             onClick = { episode -> onPlay(item.id, episode.key) },
                             onDownload = { episode ->
@@ -258,7 +258,7 @@ fun DetailsScreen(
 
     if (showSeasonSheet) {
         val item = state.item ?: return
-        SelectSeasonSheet(
+        SeasonDownloadSheet(
             seasons = state.seasons,
             episodeCounts = state.episodes.groupingBy { it.seasonNumber }.eachCount(),
             onDismiss = { showSeasonSheet = false },
@@ -494,7 +494,6 @@ private fun SeriesActions(
     state: DetailsUiState,
     sources: SourcesUiState,
     onPlayContinue: (EpisodeItem?) -> Unit,
-    onSeasonPicker: () -> Unit,
     onSeasonDownload: () -> Unit,
     onRefreshSources: () -> Unit,
 ) {
@@ -549,7 +548,7 @@ private fun SeriesActions(
         ) {
             Icon(
                 Icons.Outlined.Download,
-                contentDescription = stringRes(R.string.action_download),
+                contentDescription = stringRes(R.string.season_download_title),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -564,34 +563,51 @@ private fun SeriesActions(
     }
 }
 
+/*
+ * Season picker: one chip per season, tappable to switch the episode list (spec 6.6), with the
+ * episode count of the season that is now selected underneath.
+ */
 @Composable
-private fun SeasonPickerRow(
+private fun SeasonSelector(
     seasons: List<com.fmhub24.android.data.model.SeasonItem>,
+    selectedSeason: Int?,
     episodeCounts: Map<Int, Int>,
-    onOpenSheet: () -> Unit,
+    onSelect: (Int) -> Unit,
 ) {
-    val first = seasons.firstOrNull()
-    // Design: the selected season as a chip on the left, the episode count as a caption right.
-    Row(
+    if (seasons.isEmpty()) return
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        DesignChip(
-            text = if (first == null) {
-                stringRes(R.string.select_season)
-            } else {
-                stringRes(R.string.season_number, first.seasonNumber) + " ▾"
-            },
-            selected = true,
-            onClick = onOpenSheet,
-        )
-        Spacer(Modifier.weight(1f))
-        val count = episodeCounts[first?.seasonNumber] ?: 0
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                seasons.forEach { season ->
+                    DesignChip(
+                        text = season.name?.takeIf { it.isNotBlank() }
+                            ?: stringRes(R.string.season_number, season.seasonNumber),
+                        selected = season.seasonNumber == selectedSeason,
+                        onClick = { onSelect(season.seasonNumber) },
+                    )
+                }
+            }
+        }
+        val count = episodeCounts[selectedSeason] ?: 0
         if (count > 0) {
+            Spacer(Modifier.height(4.dp))
             Text(
-                text = stringRes(R.string.season_with_episodes, count),
+                text = stringRes(
+                    R.string.season_with_episodes,
+                    count,
+                ),
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -643,23 +659,30 @@ private fun EpisodeList(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        text = when {
-                            watched -> stringRes(R.string.watched)
-                            matchesHistory && progress > 0f -> stringRes(
-                                R.string.progress_percent,
-                                (progress * 100).toInt(),
-                            )
-                            else -> stringRes(R.string.action_download)
-                        },
-                        fontSize = 11.sp,
-                        color = if (watched) {
-                            MaterialTheme.colorScheme.secondary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
+                    // Status only when there is one: watched, the resume point, or the synopsis.
+                    val subtitle = when {
+                        watched -> stringRes(R.string.watched)
+                        matchesHistory && progress > 0f -> stringRes(
+                            R.string.progress_percent,
+                            (progress * 100).toInt(),
+                        )
+                        !episode.description.isNullOrBlank() -> episode.description.orEmpty()
+                        else -> ""
+                    }
+                    if (subtitle.isNotBlank()) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = subtitle,
+                            fontSize = 11.sp,
+                            color = if (watched) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 // Design: watched ✓ in green, an in-progress share in blue, otherwise a download ⤓.
                 when {
@@ -676,12 +699,12 @@ private fun EpisodeList(
                     )
                     else -> IconButton(
                         onClick = { onDownload(episode) },
-                        modifier = Modifier.size(34.dp),
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
                             Icons.Outlined.Download,
                             contentDescription = stringRes(R.string.action_download),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

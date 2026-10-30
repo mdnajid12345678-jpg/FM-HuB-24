@@ -69,6 +69,8 @@ fun SearchBody(
     suggestions: List<MediaItem>,
     suggestionChips: List<String>,
     trending: List<MediaItem>,
+    /** Chips and filters rendered directly under the search field (Explore). */
+    header: (@Composable () -> Unit)? = null,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onRemoveRecent: (String) -> Unit,
@@ -122,6 +124,8 @@ fun SearchBody(
         )
 
         Spacer(Modifier.height(12.dp))
+
+        header?.invoke()
 
         if (showRecents) {
             RecentSearches(

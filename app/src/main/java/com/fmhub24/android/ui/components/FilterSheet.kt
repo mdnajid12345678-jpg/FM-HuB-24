@@ -44,7 +44,14 @@ data class CatalogFilter(
 
     fun reset() = CatalogFilter()
 
-    fun matches(item: MediaItem, languageIndex: Map<String, Set<String>> = emptyMap()): Boolean {
+    /**
+     * @param languageIndex languages per title, or null while the index is still being read —
+     *   the language clause is then skipped instead of rejecting every title.
+     */
+    fun matches(
+        item: MediaItem,
+        languageIndex: Map<String, Set<String>>? = null,
+    ): Boolean {
         if (types.isNotEmpty() && typeOf(item.contentType) !in types) return false
         if (genres.isNotEmpty() && item.genres.none { genre -> genres.any { it.equals(genre, true) } }) {
             return false
@@ -52,7 +59,7 @@ data class CatalogFilter(
         val year = item.releaseYear
         if (yearFrom != null && (year == null || year < yearFrom)) return false
         if (yearTo != null && (year == null || year > yearTo)) return false
-        if (languages.isNotEmpty()) {
+        if (languages.isNotEmpty() && languageIndex != null) {
             val known = languageIndex[item.id] ?: return false
             if (known.none { language -> languages.any { it.equals(language, true) } }) return false
         }
@@ -85,9 +92,10 @@ fun FilterSheet(
     genres: List<String>,
     languages: List<String>,
     initial: CatalogFilter,
-    resultCount: Int,
+    countFor: (CatalogFilter) -> Int,
     onDismiss: () -> Unit,
     onApply: (CatalogFilter) -> Unit,
+    languagesLoading: Boolean = false,
 ) {
     var types by remember { mutableStateOf(initial.types) }
     var selectedGenres by remember { mutableStateOf(initial.genres) }
@@ -196,9 +204,24 @@ fun FilterSheet(
                 }
             }
 
+            if (languages.isEmpty()) {
+                Text(
+                    text = stringRes(
+                        if (languagesLoading) {
+                            R.string.filter_languages_loading
+                        } else {
+                            R.string.filter_languages_none
+                        },
+                    ),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             Spacer(Modifier.height(4.dp))
+            // Recomputed on every tick so the count follows the chips as they are toggled.
             PrimaryButton(
-                text = stringRes(R.string.filter_show_results, resultCount),
+                text = stringRes(R.string.filter_show_results, countFor(buildFilter())),
                 onClick = { onApply(buildFilter()) },
                 modifier = Modifier.fillMaxWidth(),
             )

@@ -62,6 +62,7 @@ fun SeeAllScreen(
     val genres by viewModel.genres.collectAsState()
     val languages by viewModel.languages.collectAsState()
     val filter by viewModel.filter.collectAsState()
+    val languageLoading by viewModel.languageLoading.collectAsState()
     var sort by remember { mutableStateOf(SORT_RECENT) }
     var showSheet by remember { mutableStateOf(false) }
 
@@ -108,7 +109,10 @@ fun SeeAllScreen(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = { showSheet = true }) {
+            IconButton(onClick = {
+                showSheet = true
+                viewModel.onFilterSheetOpen()
+            }) {
                 Icon(
                     Icons.Outlined.Tune,
                     contentDescription = stringRes(R.string.action_filter),
@@ -124,10 +128,10 @@ fun SeeAllScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             sortOptions.forEach { (value, label) ->
-                androidx.compose.material3.FilterChip(
+                SelectChip(
+                    text = label,
                     selected = sort == value,
                     onClick = { sort = value },
-                    label = { Text(label, fontSize = 12.sp) },
                 )
             }
         }
@@ -163,7 +167,8 @@ fun SeeAllScreen(
             genres = genres,
             languages = languages,
             initial = filter,
-            resultCount = items.size,
+            countFor = viewModel::countFor,
+            languagesLoading = languageLoading,
             onDismiss = { showSheet = false },
             onApply = { applied ->
                 viewModel.applyFilter(applied)

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,7 +18,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -208,10 +212,14 @@ private fun ServerRow(
 }
 
 
-/** Select season sheet (spec 6.6): season name with episode count, plus a season download entry. */
+/**
+ * Season download sheet (spec 6.6): opened from the details download button, so every row here
+ * starts a season download. Choosing which season to watch happens in the season chips above the
+ * episode list.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SelectSeasonSheet(
+fun SeasonDownloadSheet(
     seasons: List<com.fmhub24.android.data.model.SeasonItem>,
     episodeCounts: Map<Int, Int>,
     onDismiss: () -> Unit,
@@ -225,7 +233,7 @@ fun SelectSeasonSheet(
                 .padding(bottom = 24.dp),
         ) {
             Text(
-                text = stringRes(R.string.select_season),
+                text = stringRes(R.string.season_download_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -243,13 +251,16 @@ fun SelectSeasonSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { onSeasonDownload(season.seasonNumber) }
-                        .padding(vertical = 12.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = season.name ?: stringRes(R.string.season_number, season.seasonNumber),
+                            text = season.name?.takeIf { it.isNotBlank() }
+                                ?: stringRes(R.string.season_number, season.seasonNumber),
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -262,16 +273,19 @@ fun SelectSeasonSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        text = stringRes(R.string.action_download),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                    Spacer(Modifier.width(10.dp))
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = stringRes(R.string.action_download),
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
+                Spacer(Modifier.height(8.dp))
             }
 
             TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text(stringRes(R.string.action_done), fontSize = 13.sp)
+                Text(stringRes(R.string.action_cancel), fontSize = 13.sp)
             }
         }
     }

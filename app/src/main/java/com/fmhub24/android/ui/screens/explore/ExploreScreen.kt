@@ -53,7 +53,6 @@ import com.fmhub24.android.ui.screens.search.SearchBody
 @Composable
 fun ExploreScreen(
     onOpenDetails: (String) -> Unit,
-    onOpenSearch: () -> Unit,
     viewModel: ExploreViewModel = hiltViewModel(),
 ) {
     val query by viewModel.query.collectAsState()
@@ -63,6 +62,7 @@ fun ExploreScreen(
     val languages by viewModel.languages.collectAsState()
     val filter by viewModel.filter.collectAsState()
     val languageFailure by viewModel.languageFailure.collectAsState()
+    val languageLoading by viewModel.languageLoading.collectAsState()
     val online by rememberOnline()
     var showSheet by remember { mutableStateOf(false) }
 
@@ -73,120 +73,121 @@ fun ExploreScreen(
         CatalogFilter.ANIME to stringRes(R.string.category_anime),
         CatalogFilter.LIVE to stringRes(R.string.section_live_tv),
     )
-    val activeType = filter.types.singleOrNull() ?: ""
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (!online) OfflineBanner()
 
-        // Design starts Explore with a search field outlined in the accent colour.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
-                .clickable(onClick = onOpenSearch)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Outlined.Search,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = stringRes(R.string.search_hint),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = { showSheet = true }) {
-                Icon(
-                    Icons.Outlined.Tune,
-                    contentDescription = stringRes(R.string.action_filter),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            typeOptions.forEach { (value, label) ->
-                SelectChip(
-                    text = label,
-                    selected = value == activeType,
-                    onClick = {
-                        viewModel.applyFilter(
-                            filter.copy(
-                                types = if (value.isEmpty()) emptySet() else setOf(value),
-                            ),
-                        )
-                    },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FilterChipLabel(
-                label = stringRes(R.string.filter_genre),
-                active = filter.genres.isNotEmpty(),
-                onClick = { showSheet = true },
-            )
-            FilterChipLabel(
-                label = stringRes(R.string.filter_year),
-                active = filter.yearFrom != null || filter.yearTo != null,
-                onClick = { showSheet = true },
-            )
-            FilterChipLabel(
-                label = stringRes(R.string.filter_language),
-                active = filter.languages.isNotEmpty(),
-                onClick = { showSheet = true },
-            )
-            if (filter.isActive) {
-                TextButton(onClick = { viewModel.applyFilter(CatalogFilter()) }) {
-                    Text(stringRes(R.string.filter_reset), fontSize = 12.sp)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
         if (languageFailure && filter.languages.isNotEmpty()) {
-            ErrorState(message = dataErrorMessage(null))
-        } else {
-            SearchBody(
-                query = query,
-                results = results,
-                recent = recent,
-                suggestions = viewModel.suggestions(query),
-                suggestionChips = genres,
-                trending = results.take(10),
-                onQueryChange = viewModel::setQuery,
-                onSubmit = viewModel::submitSearch,
-                onRemoveRecent = viewModel::removeRecent,
-                onClearRecents = viewModel::clearRecents,
-                onOpenItem = { item ->
-                    viewModel.openItem(item)
-                    onOpenDetails(item.id)
-                },
-                modifier = Modifier.weight(1f),
-            )
+            ErrorState(message = dataErrorMessage(null), onRetry = viewModel::retryLanguages)
         }
+
+        SearchBody(
+            query = query,
+            results = results,
+            recent = recent,
+            suggestions = viewModel.suggestions(query),
+            suggestionChips = genres,
+            trending = results.take(10),
+            header = {
+                Column {
+                    // Type chips scroll; the filter button stays pinned on the right.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            typeOptions.forEach { (value, label) ->
+                                SelectChip(
+                                    text = label,
+                                    selected = if (value.isEmpty()) {
+                                        filter.types.isEmpty()
+                                    } else {
+                                        value in filter.types
+                                    },
+                                    onClick = {
+                                        val next = when {
+                                            value.isEmpty() -> emptySet()
+                                            filter.types == setOf(value) -> emptySet()
+                                            else -> setOf(value)
+                                        }
+                                        viewModel.applyFilter(filter.copy(types = next))
+                                    },
+                                )
+                            }
+                        }
+                        IconButton(onClick = {
+                            showSheet = true
+                            viewModel.onFilterSheetOpen()
+                        }) {
+                            Icon(
+                                Icons.Outlined.Tune,
+                                contentDescription = stringRes(R.string.action_filter),
+                                tint = if (filter.isActive) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FilterChipLabel(
+                            label = stringRes(R.string.filter_genre),
+                            active = filter.genres.isNotEmpty(),
+                            onClick = {
+                                showSheet = true
+                                viewModel.onFilterSheetOpen()
+                            },
+                        )
+                        FilterChipLabel(
+                            label = stringRes(R.string.filter_year),
+                            active = filter.yearFrom != null || filter.yearTo != null,
+                            onClick = {
+                                showSheet = true
+                                viewModel.onFilterSheetOpen()
+                            },
+                        )
+                        FilterChipLabel(
+                            label = stringRes(R.string.filter_language),
+                            active = filter.languages.isNotEmpty(),
+                            onClick = {
+                                showSheet = true
+                                viewModel.onFilterSheetOpen()
+                            },
+                        )
+                        if (filter.isActive) {
+                            TextButton(onClick = { viewModel.applyFilter(CatalogFilter()) }) {
+                                Text(stringRes(R.string.filter_reset), fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                }
+            },
+            onQueryChange = viewModel::setQuery,
+            onSubmit = viewModel::submitSearch,
+            onRemoveRecent = viewModel::removeRecent,
+            onClearRecents = viewModel::clearRecents,
+            onOpenItem = { item ->
+                viewModel.openItem(item)
+                onOpenDetails(item.id)
+            },
+            modifier = Modifier.weight(1f),
+        )
     }
 
     if (showSheet) {
@@ -194,7 +195,8 @@ fun ExploreScreen(
             genres = genres,
             languages = languages,
             initial = filter,
-            resultCount = results.size,
+            countFor = viewModel::countFor,
+            languagesLoading = languageLoading,
             onDismiss = { showSheet = false },
             onApply = { applied ->
                 viewModel.applyFilter(applied)

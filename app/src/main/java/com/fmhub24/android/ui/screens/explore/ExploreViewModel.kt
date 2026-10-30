@@ -28,6 +28,8 @@ class ExploreViewModel @Inject constructor(
     val filter = MutableStateFlow(CatalogFilter())
 
     private val languageIndex = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    private val languageIndexLoaded = MutableStateFlow(false)
+    private val languageIndexLoading = MutableStateFlow(false)
     private val languageIndexError = MutableStateFlow(false)
 
     val recentSearches: StateFlow<List<String>> = watchState.searchHistory
@@ -42,12 +44,16 @@ class ExploreViewModel @Inject constructor(
         query,
         filter,
         languageIndex,
-    ) { items, text, active, index ->
+        languageIndexLoaded,
+    ) { items, text, active, index, loaded ->
         val needle = text.trim()
+        // Until the language index is in memory the language clause is skipped rather than
+        // hiding every title (the chips would look like a filter that matches nothing).
+        val languages = if (loaded) index else null
         items.filter { item ->
             (needle.isEmpty() || item.title.contains(needle, true) ||
                 item.originalTitle?.contains(needle, true) == true) &&
-                active.matches(item, if (active.languages.isEmpty()) emptyMap() else index)
+                active.matches(item, languages)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -65,6 +71,8 @@ class ExploreViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val languageFailure: StateFlow<Boolean> = languageIndexError
+
+    val languageLoading: StateFlow<Boolean> = languageIndexLoading
 
     /** Prefix matches used as suggestions while typing. */
     fun suggestions(text: String, limit: Int = 6): List<MediaItem> {
@@ -102,23 +110,45 @@ class ExploreViewModel @Inject constructor(
         if (value.languages.isNotEmpty()) refreshLanguages()
     }
 
+    /** How many titles a not-yet-applied filter would leave: the sheet's button count. */
+    fun countFor(candidate: CatalogFilter): Int {
+        val index = if (languageIndexLoaded.value) languageIndex.value else null
+        return catalogItems.value.count { candidate.matches(it, index) }
+    }
+
+    /** Opens the language section before the user can reach for it: the chips come from the index. */
+    fun onFilterSheetOpen() {
+        if (languageIndex.value.isEmpty()) refreshLanguages()
+    }
+
+    /** Retries the language index after the filter reported a failure. */
+    fun retryLanguages() {
+        refreshLanguages()
+    }
+
     /**
      * Reads the language of each title from media_sources in one request. The index stays in
      * memory only: media_sources must never be cached (spec 5.5).
      */
     private fun refreshLanguages() {
         val ids = catalogItems.value.map { it.id }.take(500)
-        if (ids.isEmpty()) return
+        if (ids.isEmpty() || languageIndexLoading.value) return
         viewModelScope.launch {
+            languageIndexLoading.value = true
             try {
                 languageIndex.value = sources.languageIndex(ids)
+                languageIndexLoaded.value = true
                 languageIndexError.value = false
             } catch (error: DataException) {
                 languageIndex.value = emptyMap()
+                languageIndexLoaded.value = false
                 languageIndexError.value = true
             } catch (error: Exception) {
                 languageIndex.value = emptyMap()
+                languageIndexLoaded.value = false
                 languageIndexError.value = true
+            } finally {
+                languageIndexLoading.value = false
             }
         }
     }
