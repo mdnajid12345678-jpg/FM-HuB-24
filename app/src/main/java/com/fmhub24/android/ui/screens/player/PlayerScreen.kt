@@ -129,8 +129,9 @@ fun PlayerScreen(
         val window = activity?.window
         onDispose {
             window?.let {
-                WindowCompat.getInsetsController(it, it.decorView)
-                    .show(WindowInsetsCompat.Type.systemBars())
+                val controller = WindowCompat.getInsetsController(it, it.decorView)
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+                controller.show(WindowInsetsCompat.Type.systemBars())
             }
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
@@ -154,7 +155,9 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler(onBack = onBack)
+    BackHandler {
+        if (fullscreen) fullscreen = false else onBack()
+    }
 
     val background = Color(0xFF05052B)
 
@@ -498,7 +501,7 @@ private fun PlayerContent(
             }
         }
 
-        if (showControls || !isPlaying) {
+        if (!locked && !state.loading && (showControls || !isPlaying)) {
             ControlsOverlay(
                 state = state,
                 position = position,

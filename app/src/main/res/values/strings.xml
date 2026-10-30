@@ -50,6 +50,8 @@
     <string name="category_anime">Anime</string>
     <string name="section_continue_watching">Continue watching</string>
     <string name="section_recently_added">Recently added</string>
+    <string name="section_new_this_week">New this week</string>
+    <string name="home_featured">FEATURED</string>
     <string name="section_movies">Movies</string>
     <string name="section_series">Series</string>
     <string name="section_anime">Anime</string>

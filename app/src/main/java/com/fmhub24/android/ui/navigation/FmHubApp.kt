@@ -1,9 +1,18 @@
 package com.fmhub24.android.ui.navigation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
@@ -13,17 +22,17 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
@@ -93,59 +102,64 @@ private val tabs = listOf(
     Tab(Dest.PROFILE, R.string.tab_profile, Icons.Outlined.Person),
 )
 
-/**
- * The five-tab bar: a native Material navigation bar tinted with the design tokens — a hairline
- * top edge, the active tab in the brand light blue (#7DB0FF) over a translucent accent indicator,
- * the rest at 55% white, labels always visible, and the system navigation inset handled by the
- * bar itself.
- */
+/** Screenshot-matched floating pill: the active destination has an amber icon+label pill. */
 @Composable
 private fun DesignTabBar(currentRoute: String?, onNavigate: (String) -> Unit) {
-    val background = MaterialTheme.colorScheme.background
-    // The mockup's #7DB0FF is a dark-theme accent; on light backgrounds use the scheme primary.
-    val dark = background.luminance() < 0.5f
-    val activeColor = if (dark) Color(0xFF7DB0FF) else MaterialTheme.colorScheme.primary
-    val inactiveColor = if (dark) {
-        Color.White.copy(alpha = 0.55f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Column(modifier = Modifier.background(background)) {
-        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
-        NavigationBar(
-            containerColor = background,
-            contentColor = inactiveColor,
+    val barBackground = Color(0xFF14221D)
+    val accent = Color(0xFFF4B84A)
+    val inactive = Color(0xFF9BAAA2)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF08130F))
+            .padding(horizontal = 18.dp)
+            .navigationBarsPadding()
+            .padding(bottom = 8.dp),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(40.dp),
+            color = barBackground,
             tonalElevation = 0.dp,
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(68.dp).padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             tabs.forEach { tab ->
                 val selected = currentRoute == tab.route
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = { onNavigate(tab.route) },
-                    icon = {
+                Box(
+                    modifier = Modifier
+                        .weight(if (selected) 1.8f else 1f)
+                        .height(54.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) accent else Color.Transparent)
+                        .clickable { onNavigate(tab.route) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = stringResource(tab.labelRes),
                             modifier = Modifier.size(22.dp),
+                            tint = if (selected) Color(0xFF182018) else inactive,
                         )
-                    },
-                    label = {
-                        Text(
-                            text = stringResource(tab.labelRes),
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                        )
-                    },
-                    alwaysShowLabel = true,
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = activeColor,
-                        selectedTextColor = activeColor,
-                        unselectedIconColor = inactiveColor,
-                        unselectedTextColor = inactiveColor,
-                        indicatorColor = activeColor.copy(alpha = 0.18f),
-                    ),
-                )
+                        if (selected) {
+                            Text(
+                                text = stringResource(tab.labelRes),
+                                color = Color(0xFF182018),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
             }
         }
     }

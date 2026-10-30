@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package com.fmhub24.android.ui.screens.home
 
 import androidx.compose.foundation.background
@@ -10,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Movie
@@ -27,10 +27,10 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,28 +40,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.compose.runtime.collectAsState
+import coil3.compose.AsyncImage
 import com.fmhub24.android.R
 import com.fmhub24.android.data.model.HomeCategory
 import com.fmhub24.android.data.model.MediaItem
-import com.fmhub24.android.ui.components.ChipRow
 import com.fmhub24.android.ui.components.EmptyState
 import com.fmhub24.android.ui.components.ErrorState
-import com.fmhub24.android.ui.components.LandscapeThumb
-import com.fmhub24.android.ui.components.LoadingState
 import com.fmhub24.android.ui.components.OfflineBanner
-import com.fmhub24.android.ui.components.PosterCard
-import com.fmhub24.android.ui.components.SectionHeader
-import com.fmhub24.android.ui.components.ThinProgress
 import com.fmhub24.android.ui.components.dataErrorMessage
 import com.fmhub24.android.ui.components.rememberOnline
 import com.fmhub24.android.ui.components.stringRes
+
+private val HomeBackground = Color(0xFF08130F)
+private val HomeSurface = Color(0xFF14221D)
+private val HomeAccent = Color(0xFFF4B84A)
+private val HomeMuted = Color(0xFFAAB8B0)
 
 @Composable
 fun HomeScreen(
@@ -80,279 +81,348 @@ fun HomeScreen(
     val recent = remember(state.items) { viewModel.recentlyAdded(state.items) }
     val rows = remember(state.items, selected) { viewModel.rows(state.items, selected) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (!online) OfflineBanner()
-
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
+    Column(Modifier.fillMaxSize().background(HomeBackground)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item(key = "home-header") { HomeHeader(onOpenSearch) }
+            item(key = "home-categories") {
+                CategorySelector(
+                    selected = selected,
+                    onSelected = { category = it.name },
                 )
-            },
-            actions = {
-                IconButton(onClick = onOpenSearch) {
-                    Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.action_search))
+            }
+            if (!online) item(key = "offline-banner") { OfflineBanner() }
+
+            if (state.loading && state.items.isEmpty()) {
+                item(key = "home-loading") {
+                    Box(Modifier.fillMaxWidth().height(280.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(color = HomeAccent)
+                    }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background,
-                titleContentColor = MaterialTheme.colorScheme.onBackground,
-                actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-        )
-
-        when {
-            state.loading && state.items.isEmpty() -> LoadingState()
-            state.error != null && state.items.isEmpty() -> Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                ErrorState(
-                    message = dataErrorMessage(state.error),
-                    onRetry = viewModel::refresh,
-                )
-            }
-            else -> HomeContent(
-                state = state,
-                featured = featured,
-                recent = recent,
-                rows = rows,
-                selectedCategory = selected,
-                onCategorySelected = { category = it.name },
-                onSeeAll = onSeeAll,
-                onOpenDetails = onOpenDetails,
-                onOpenChannel = onOpenChannel,
-                onRefresh = viewModel::refresh,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HomeContent(
-    state: HomeUiState,
-    featured: MediaItem?,
-    recent: List<MediaItem>,
-    rows: List<HomeRow>,
-    selectedCategory: HomeCategory,
-    onCategorySelected: (HomeCategory) -> Unit,
-    onSeeAll: (HomeCategory) -> Unit,
-    onOpenDetails: (String) -> Unit,
-    onOpenChannel: (String) -> Unit,
-    onRefresh: () -> Unit,
-) {
-    val categoryOptions = listOf(
-        HomeCategory.ALL.name to stringRes(R.string.category_all),
-        HomeCategory.MOVIES.name to stringRes(R.string.category_movies),
-        HomeCategory.SERIES.name to stringRes(R.string.category_series),
-        HomeCategory.ANIME.name to stringRes(R.string.category_anime),
-    )
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        item {
-            ChipRow(
-                options = categoryOptions,
-                selected = selectedCategory.name,
-                onSelect = { value ->
-                    onCategorySelected(
-                        HomeCategory.entries.firstOrNull { it.name == value } ?: HomeCategory.ALL,
+            } else if (state.error != null && state.items.isEmpty()) {
+                item(key = "home-error") {
+                    ErrorState(
+                        message = dataErrorMessage(state.error),
+                        onRetry = viewModel::refresh,
                     )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-
-        if (state.error != null) {
-            item { ErrorState(message = dataErrorMessage(state.error), onRetry = onRefresh) }
-        }
-
-        if (featured != null) {
-            item {
-                FeaturedBanner(
-                    item = featured,
-                    onClick = {
-                        if (featured.isLive) onOpenChannel(featured.id) else onOpenDetails(featured.id)
-                    },
-                )
-            }
-        }
-
-        // Continue watching: design shows a two-column grid of landscape thumbnails, each with a
-        // progress bar under the frame.
-        if (state.continueWatching.isNotEmpty()) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SectionHeader(title = stringRes(R.string.section_continue_watching))
-                    Spacer(Modifier.height(10.dp))
-                    state.continueWatching.chunked(2).forEach { pair ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            pair.forEach { entry ->
-                                val item = state.items.firstOrNull { it.id == entry.contentId }
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            if (item != null) onOpenDetails(item.id)
-                                        },
-                                ) {
-                                    LandscapeThumb(
-                                        url = entry.posterUrl,
-                                        contentDescription = entry.title,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    Spacer(Modifier.height(5.dp))
-                                    ThinProgress(progress = entry.progress ?: 0f)
-                                    Spacer(Modifier.height(5.dp))
-                                    Text(
-                                        text = entry.title,
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            } else {
+                if (state.error != null) {
+                    item(key = "home-inline-error") {
+                        ErrorState(message = dataErrorMessage(state.error), onRetry = viewModel::refresh)
+                    }
+                }
+                if (featured != null) {
+                    item(key = "home-featured") {
+                        FeaturedHero(
+                            item = featured,
+                            onClick = {
+                                if (featured.isLive) onOpenChannel(featured.id)
+                                else onOpenDetails(featured.id)
+                            },
+                        )
+                    }
+                }
+                if (recent.isNotEmpty()) {
+                    item(key = "home-new-this-week") {
+                        PosterCarousel(
+                            title = stringRes(R.string.section_new_this_week),
+                            items = recent,
+                            onOpenDetails = onOpenDetails,
+                            onSeeAll = { onSeeAll(HomeCategory.ALL) },
+                        )
+                    }
+                }
+                rows.forEach { row ->
+                    item(key = "home-section-${row.titleRes}") {
+                        val seeAllCategory = when (row.titleRes) {
+                            R.string.section_movies -> HomeCategory.MOVIES
+                            R.string.section_series -> HomeCategory.SERIES
+                            R.string.section_anime -> HomeCategory.ANIME
+                            else -> selected
                         }
+                        PosterCarousel(
+                            title = stringRes(row.titleRes),
+                            items = row.items,
+                            onOpenDetails = { id ->
+                                if (row.items.firstOrNull { it.id == id }?.isLive == true) onOpenChannel(id)
+                                else onOpenDetails(id)
+                            },
+                            onSeeAll = { onSeeAll(seeAllCategory) },
+                        )
+                    }
+                }
+                if (state.items.isEmpty() && state.error == null) {
+                    item(key = "home-empty") {
+                        EmptyState(
+                            title = stringRes(R.string.empty_home_title),
+                            detail = stringRes(R.string.empty_home_detail),
+                            icon = Icons.Outlined.Movie,
+                        )
                     }
                 }
             }
         }
-
-        if (recent.isNotEmpty()) {
-            item {
-                PosterGrid(
-                    title = stringRes(R.string.section_recently_added),
-                    items = recent,
-                    onOpenDetails = onOpenDetails,
-                    onSeeAll = { onSeeAll(HomeCategory.ALL) },
-                )
-            }
-        }
-
-        rows.forEach { row ->
-            item {
-                PosterRow(
-                    title = stringRes(row.titleRes),
-                    items = row.items,
-                    onOpenDetails = onOpenDetails,
-                    onSeeAll = { onSeeAll(selectedCategory) },
-                )
-            }
-        }
-
-        if (state.items.isEmpty() && state.error == null) {
-            item {
-                EmptyState(
-                    title = stringRes(R.string.empty_home_title),
-                    detail = stringRes(R.string.empty_home_detail),
-                    icon = Icons.Outlined.Movie,
-                )
-            }
-        }
     }
 }
 
-/** Design `.ban` + `.pg`: a flat accent banner with the title left and a play glyph right. */
 @Composable
-private fun FeaturedBanner(item: MediaItem, onClick: () -> Unit) {
+private fun HomeHeader(onOpenSearch: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(88.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(start = 24.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (item.isLive) {
-            com.fmhub24.android.ui.components.LiveBadge()
-            Spacer(Modifier.width(10.dp))
-        }
         Text(
-            text = item.title,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            text = buildAnnotatedString {
+                pushStyle(SpanStyle(color = Color(0xFFF2F5F2), fontWeight = FontWeight.ExtraBold))
+                append("FMHuB")
+                pop()
+                pushStyle(SpanStyle(color = HomeAccent, fontWeight = FontWeight.ExtraBold))
+                append("24")
+                pop()
+            },
+            fontSize = 25.sp,
+            letterSpacing = (-0.5).sp,
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(12.dp))
-        Icon(
-            imageVector = Icons.Outlined.PlayArrow,
-            contentDescription = stringRes(R.string.action_play),
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(26.dp),
-        )
-    }
-}
-
-/** Design `.pg`: a three-column poster grid under a bold heading. */
-@Composable
-private fun PosterGrid(
-    title: String,
-    items: List<MediaItem>,
-    onOpenDetails: (String) -> Unit,
-    onSeeAll: () -> Unit,
-) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        SectionHeader(title = title, onSeeAll = onSeeAll)
-        Spacer(Modifier.height(10.dp))
-        items.take(6).chunked(3).forEach { rowItems ->
+        Surface(
+            onClick = onOpenSearch,
+            shape = CircleShape,
+            color = HomeSurface,
+            contentColor = HomeMuted,
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                rowItems.forEach { item ->
-                    PosterCard(
-                        item = item,
-                        onClick = { onOpenDetails(item.id) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
+                Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                Text(stringRes(R.string.action_search), fontSize = 14.sp, color = HomeMuted)
             }
         }
     }
 }
 
 @Composable
-private fun PosterRow(
+private fun CategorySelector(
+    selected: HomeCategory,
+    onSelected: (HomeCategory) -> Unit,
+) {
+    val categories = listOf(
+        HomeCategory.ALL to stringRes(R.string.category_all),
+        HomeCategory.MOVIES to stringRes(R.string.category_movies),
+        HomeCategory.SERIES to stringRes(R.string.category_series),
+        HomeCategory.ANIME to stringRes(R.string.category_anime),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(CircleShape)
+            .background(HomeSurface)
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        categories.forEach { (category, label) ->
+            val active = selected == category
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(CircleShape)
+                    .background(if (active) HomeAccent else Color.Transparent)
+                    .clickable { onSelected(category) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
+                    color = if (active) Color(0xFF17130B) else HomeMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeaturedHero(item: MediaItem, onClick: () -> Unit) {
+    val metadata = buildList {
+        addAll(item.genres.take(2))
+        item.releaseYear?.let { add(it.toString()) }
+    }.joinToString(" · ")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .aspectRatio(1.9f)
+            .clip(RoundedCornerShape(28.dp))
+            .background(
+                Brush.linearGradient(listOf(Color(0xFF1C7765), Color(0xFFB99347), Color(0xFF263B31))),
+            )
+            .clickable(onClick = onClick),
+    ) {
+        if (!item.posterUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = item.posterUrl,
+                contentDescription = item.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color(0x22101713),
+                            0.42f to Color(0x33101713),
+                            1f to Color(0xEE08100D),
+                        ),
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 20.dp, end = 92.dp, bottom = 22.dp),
+        ) {
+            Text(
+                stringRes(R.string.home_featured),
+                color = HomeAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = item.title,
+                color = Color.White,
+                fontSize = 24.sp,
+                lineHeight = 28.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (metadata.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    metadata,
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 18.dp, bottom = 20.dp)
+                .size(62.dp),
+            shape = CircleShape,
+            color = HomeAccent,
+            contentColor = Color(0xFF17130B),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.PlayArrow,
+                    contentDescription = stringRes(R.string.action_play),
+                    modifier = Modifier.size(34.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PosterCarousel(
     title: String,
     items: List<MediaItem>,
     onOpenDetails: (String) -> Unit,
     onSeeAll: () -> Unit,
 ) {
     Column {
-        SectionHeader(
-            title = title,
-            modifier = Modifier.padding(horizontal = 16.dp),
-            onSeeAll = onSeeAll,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                color = Color(0xFFEAF0EC),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringRes(R.string.action_see_all),
+                color = HomeAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(onClick = onSeeAll).padding(6.dp),
+            )
+        }
         Spacer(Modifier.height(10.dp))
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(items, key = { it.id }) { item ->
-                PosterCard(
+                HomePosterCard(
                     item = item,
                     onClick = { onOpenDetails(item.id) },
-                    modifier = Modifier.width(116.dp),
+                    modifier = Modifier.width(136.dp),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HomePosterCard(
+    item: MediaItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.clickable(onClick = onClick)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.76f)
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.verticalGradient(listOf(Color(0xFF286B54), Color(0xFF34404C), Color(0xFF9D552F))),
+                ),
+        ) {
+            if (!item.posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.posterUrl,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        Text(
+            text = item.title,
+            color = Color(0xFFE7ECE9),
+            fontSize = 13.sp,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

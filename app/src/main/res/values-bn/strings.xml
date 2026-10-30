@@ -49,6 +49,8 @@
     <string name="category_anime">অ্যানিমে</string>
     <string name="section_continue_watching">দেখা চালিয়ে যান</string>
     <string name="section_recently_added">সম্প্রতি যোগ হয়েছে</string>
+    <string name="section_new_this_week">এই সপ্তাহে নতুন</string>
+    <string name="home_featured">বিশেষ বাছাই</string>
     <string name="section_movies">মুভি</string>
     <string name="section_series">সিরিজ</string>
     <string name="section_anime">অ্যানিমে</string>
