@@ -144,6 +144,7 @@
     <string name="chip_lock">Lock</string>
     <string name="player_locked">Controls locked</string>
     <string name="player_unlock">Tap to unlock</string>
+    <string name="player_lock_prompt">Tap to lock</string>
     <string name="player_fullscreen">Enter fullscreen</string>
     <string name="player_exit_fullscreen">Exit fullscreen</string>
     <string name="player_episode_playlist">Episodes</string>
@@ -162,6 +163,14 @@
     <string name="text_size_large">Large</string>
     <string name="quality_auto">Auto</string>
     <string name="audio_tracks">Audio tracks</string>
+    <string name="player_fit">Fit</string>
+    <string name="player_fill">Fill</string>
+    <string name="player_audio_track">Audio track %1$d</string>
+    <string name="player_subtitle_track">Subtitle track %1$d</string>
+    <string name="player_no_audio_tracks">No alternate audio or language tracks</string>
+    <string name="player_audio_streams">Available language streams</string>
+    <string name="player_no_alternative_servers">No alternative servers are available</string>
+    <string name="player_settings">Settings</string>
 
     <!-- Downloads -->
     <string name="downloads_storage_used">Storage used: %1$s</string>

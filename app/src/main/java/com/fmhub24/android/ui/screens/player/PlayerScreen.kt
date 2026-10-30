@@ -14,7 +14,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import com.fmhub24.android.ui.components.DesignChip
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.border
@@ -34,15 +33,22 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AspectRatio
+import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Forward10
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Pause
@@ -50,7 +56,9 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.Replay10
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,10 +112,69 @@ import com.fmhub24.android.stream.StreamEngine
 import com.fmhub24.android.stream.StreamError
 import com.fmhub24.android.stream.DownloadEngine
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 private enum class SeekRipple { LEFT, RIGHT }
-private enum class PlayerPanel { SETTINGS, EPISODES, SPEED, SUBTITLES }
+private enum class PlayerPanel { AUDIO, SERVERS, QUALITY, EPISODES, SPEED }
 private enum class DragSide { LEFT, RIGHT }
+
+private data class TrackChoice(
+    val groupIndex: Int,
+    val trackIndex: Int,
+    val label: String?,
+    val selected: Boolean,
+)
+
+private fun trackChoices(tracks: Tracks, type: Int): List<TrackChoice> = buildList {
+    tracks.groups.forEachIndexed { groupIndex, group ->
+        if (group.type != type) return@forEachIndexed
+        for (trackIndex in 0 until group.length) {
+            val format = group.getTrackFormat(trackIndex)
+            val label = displayLanguage(format.language)
+                ?: format.label?.trim()?.takeIf {
+                    it.isNotEmpty() && !it.matches(Regex("(?i)^(audio|subtitle|track|stream)\\s*#?\\d+$"))
+                }
+            add(
+                TrackChoice(
+                    groupIndex = groupIndex,
+                    trackIndex = trackIndex,
+                    label = label,
+                    selected = group.isTrackSelected(trackIndex),
+                ),
+            )
+        }
+    }
+}
+
+private fun displayLanguage(rawLanguage: String?): String? {
+    val tag = rawLanguage?.trim()?.replace('_', '-')?.takeIf {
+        it.isNotEmpty() && !it.equals("und", true) && !it.equals("zxx", true)
+    } ?: return null
+    val code = tag.substringBefore('-').lowercase(Locale.ROOT)
+    val known = mapOf(
+        "en" to "English", "eng" to "English",
+        "bn" to "Bengali", "ben" to "Bengali",
+        "hi" to "Hindi", "hin" to "Hindi",
+        "ta" to "Tamil", "tam" to "Tamil",
+        "te" to "Telugu", "tel" to "Telugu",
+        "ur" to "Urdu", "urd" to "Urdu",
+        "ar" to "Arabic", "ara" to "Arabic",
+        "ja" to "Japanese", "jpn" to "Japanese",
+        "ko" to "Korean", "kor" to "Korean",
+        "zh" to "Chinese", "zho" to "Chinese", "chi" to "Chinese",
+        "fr" to "French", "fra" to "French", "fre" to "French",
+        "es" to "Spanish", "spa" to "Spanish",
+        "pt" to "Portuguese", "por" to "Portuguese",
+        "ru" to "Russian", "rus" to "Russian",
+    )
+    return known[code] ?: Locale.forLanguageTag(tag).getDisplayLanguage(Locale.getDefault())
+        .takeIf { it.isNotBlank() && !it.equals(code, true) }
+        ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+}
+
+@Composable
+private fun TrackChoice.label(fallbackResource: Int): String =
+    label ?: stringRes(fallbackResource, trackIndex + 1)
 
 /** Landscape player (spec 6.7): controls, gestures, panels, resume, failure and next episode. */
 @Composable
@@ -305,7 +372,14 @@ private fun PlayerContent(
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
+    val audioTracks = remember(tracks) { trackChoices(tracks, C.TRACK_TYPE_AUDIO) }
+    val subtitleTracks = remember(tracks) { trackChoices(tracks, C.TRACK_TYPE_TEXT) }
+    val audioLabel = audioTracks.firstOrNull { it.selected }?.let {
+        it.label ?: stringRes(R.string.player_audio_track, it.trackIndex + 1)
+    } ?: state.languageKey?.let { SourceSelection.languageLabel(it, false) }
+        ?: stringRes(R.string.quality_auto)
     var lastSavedBucket by remember { mutableLongStateOf(0L) }
+    var fitToScreen by remember(source.mediaUrl) { mutableStateOf(true) }
 
     LaunchedEffect(player) {
         while (true) {
@@ -349,6 +423,13 @@ private fun PlayerContent(
     var reportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(player, speed) { player.setPlaybackSpeed(speed) }
+    LaunchedEffect(player, fitToScreen) {
+        player.videoScalingMode = if (fitToScreen) {
+            C.VIDEO_SCALING_MODE_SCALE_TO_FIT
+        } else {
+            C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+        }
+    }
     LaunchedEffect(gestureHint) {
         if (gestureHint != null) {
             delay(900)
@@ -510,7 +591,10 @@ private fun PlayerContent(
                 isFullscreen = isFullscreen,
                 speed = speed,
                 panel = panel,
-                tracks = tracks,
+                audioTracks = audioTracks,
+                subtitleTracks = subtitleTracks,
+                audioLabel = audioLabel,
+                fitToScreen = fitToScreen,
                 onBack = onBack,
                 onToggleFullscreen = onToggleFullscreen,
                 onTogglePlay = {
@@ -521,6 +605,25 @@ private fun PlayerContent(
                 onPanel = { chosen ->
                     panel = if (panel == chosen) null else chosen
                     showControls = true
+                },
+                onToggleFit = { fitToScreen = !fitToScreen },
+                onSelectAudioTrack = { choice ->
+                    val group = tracks.groups[choice.groupIndex]
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                        .addOverride(
+                            androidx.media3.common.TrackSelectionOverride(
+                                group.mediaTrackGroup,
+                                choice.trackIndex,
+                            ),
+                        )
+                        .build()
+                    panel = null
+                },
+                onSelectSourceLanguage = { language ->
+                    viewModel.switchLanguage(language, position, duration)
+                    panel = null
                 },
                 onSpeed = { value ->
                     speed = value
@@ -545,10 +648,6 @@ private fun PlayerContent(
                             ),
                         )
                         .build()
-                },
-                onLanguage = { language ->
-                    viewModel.switchLanguage(language, position, duration)
-                    panel = null
                 },
                 onServer = { server ->
                     viewModel.switchSource(server, position, duration)
@@ -577,7 +676,6 @@ private fun PlayerContent(
                     onOpenEpisode(state.item?.id.orEmpty(), selected.key, isFullscreen)
                 },
                 onReport = { reportOpen = true },
-                reportLabel = reportLabel,
             )
         }
 
@@ -612,6 +710,17 @@ private fun PlayerContent(
             )
         }
     }
+    if (!isFullscreen) {
+        PortraitPlayerInfo(
+            state = state,
+            audioLabel = audioLabel,
+            onAudio = {
+                panel = PlayerPanel.AUDIO
+                showControls = true
+            },
+            onFullscreen = onToggleFullscreen,
+        )
+    }
     if (!isFullscreen && state.isSeries) {
         EpisodePlaylist(
             state = state,
@@ -626,6 +735,62 @@ private fun PlayerContent(
 }
 
 @Composable
+private fun PortraitPlayerInfo(
+    state: PlayerUiState,
+    audioLabel: String,
+    onAudio: () -> Unit,
+    onFullscreen: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF08130F))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = state.title,
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (state.subtitle.isNotEmpty()) {
+            Spacer(Modifier.height(3.dp))
+            Text(state.subtitle, color = Color.White.copy(alpha = 0.66f), fontSize = 12.sp)
+        }
+        val meta = listOfNotNull(
+            state.item?.releaseYear?.toString(),
+            state.item?.rating?.takeIf { it > 0.0 }?.let { "★ ${"%.1f".format(it)}" },
+        )
+        if (meta.isNotEmpty()) {
+            Spacer(Modifier.height(5.dp))
+            Text(meta.joinToString("  ·  "), color = Color.White.copy(alpha = 0.58f), fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(9.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PlayerActionButton(
+                icon = Icons.Outlined.Audiotrack,
+                label = stringRes(R.string.chip_language),
+                value = audioLabel,
+                active = false,
+                onClick = onAudio,
+            )
+            PlayerActionButton(
+                icon = Icons.Outlined.Fullscreen,
+                label = stringRes(R.string.player_fullscreen),
+                value = null,
+                active = false,
+                onClick = onFullscreen,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ControlsOverlay(
     state: PlayerUiState,
     position: Long,
@@ -634,16 +799,21 @@ private fun ControlsOverlay(
     isFullscreen: Boolean,
     speed: Float,
     panel: PlayerPanel?,
-    tracks: Tracks,
+    audioTracks: List<TrackChoice>,
+    subtitleTracks: List<TrackChoice>,
+    audioLabel: String,
+    fitToScreen: Boolean,
     onBack: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onPanel: (PlayerPanel) -> Unit,
+    onToggleFit: () -> Unit,
     onSpeed: (Float) -> Unit,
+    onSelectAudioTrack: (TrackChoice) -> Unit,
+    onSelectSourceLanguage: (String) -> Unit,
     onSubtitleOff: () -> Unit,
     onSubtitleSelect: (Int, Int) -> Unit,
-    onLanguage: (String) -> Unit,
     onServer: (MediaSource) -> Unit,
     onLock: () -> Unit,
     onPip: () -> Unit,
@@ -651,7 +821,6 @@ private fun ControlsOverlay(
     onNextEpisode: () -> Unit,
     onSelectEpisode: (EpisodeItem) -> Unit,
     onReport: () -> Unit,
-    reportLabel: String = "",
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -685,11 +854,27 @@ private fun ControlsOverlay(
                     )
                 }
             }
+            if (isFullscreen) {
+                TextButton(onClick = onLock) {
+                    Icon(Icons.Outlined.Lock, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringRes(R.string.player_lock_prompt), color = Color.White, fontSize = 11.sp)
+                }
+            }
             if (state.isSeries && state.nextEpisode != null) {
                 IconButton(onClick = onNextEpisode) {
                     Icon(
                         Icons.Outlined.SkipNext,
                         contentDescription = stringRes(R.string.player_next_episode),
+                        tint = Color.White,
+                    )
+                }
+            }
+            if (isFullscreen) {
+                IconButton(onClick = onReport) {
+                    Icon(
+                        Icons.Outlined.HelpOutline,
+                        contentDescription = stringRes(R.string.report_problem),
                         tint = Color.White,
                     )
                 }
@@ -780,41 +965,59 @@ private fun ControlsOverlay(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (state.isSeries) {
-                    PlayerChip(
-                        text = stringRes(R.string.chip_episodes),
-                        onClick = { onPanel(PlayerPanel.EPISODES) },
-                        active = panel == PlayerPanel.EPISODES,
-                    )
-                }
-                PlayerChip(
-                    text = stringRes(R.string.chip_language),
-                    onClick = { onPanel(PlayerPanel.SETTINGS) },
-                    active = panel == PlayerPanel.SETTINGS,
-                )
-                PlayerChip(
-                    text = "${speed}x",
-                    onClick = { onPanel(PlayerPanel.SPEED) },
-                    active = panel == PlayerPanel.SPEED,
-                )
-                if (tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }) {
-                    PlayerChip(
-                        text = stringRes(R.string.player_no_subtitles),
-                        onClick = { onPanel(PlayerPanel.SUBTITLES) },
-                        active = panel == PlayerPanel.SUBTITLES,
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                PlayerChip(
-                    text = stringRes(R.string.chip_lock),
-                    onClick = onLock,
+            if (isFullscreen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                PlayerActionButton(
+                    icon = Icons.Outlined.AspectRatio,
+                    label = stringRes(if (fitToScreen) R.string.player_fit else R.string.player_fill),
+                    value = null,
                     active = false,
+                    onClick = onToggleFit,
                 )
+                PlayerActionButton(
+                    icon = Icons.Outlined.Audiotrack,
+                    label = stringRes(R.string.chip_language),
+                    value = audioLabel,
+                    active = panel == PlayerPanel.AUDIO,
+                    onClick = { onPanel(PlayerPanel.AUDIO) },
+                )
+                PlayerActionButton(
+                    icon = Icons.Outlined.Speed,
+                    label = stringRes(R.string.chip_speed),
+                    value = "${speed}x",
+                    active = panel == PlayerPanel.SPEED,
+                    onClick = { onPanel(PlayerPanel.SPEED) },
+                )
+                val quality = state.source?.quality?.let { "${it}p" }
+                    ?: stringRes(R.string.quality_auto)
+                PlayerActionButton(
+                    icon = Icons.Outlined.HighQuality,
+                    label = stringRes(R.string.chip_quality),
+                    value = quality,
+                    active = panel == PlayerPanel.QUALITY,
+                    onClick = { onPanel(PlayerPanel.QUALITY) },
+                )
+                if (state.isSeries) {
+                    PlayerActionButton(
+                        icon = Icons.Outlined.SkipNext,
+                        label = stringRes(R.string.chip_episodes),
+                        value = state.subtitle,
+                        active = panel == PlayerPanel.EPISODES,
+                        onClick = { onPanel(PlayerPanel.EPISODES) },
+                    )
+                }
+                    PlayerActionButton(
+                        icon = Icons.Outlined.Settings,
+                        label = stringRes(R.string.player_settings),
+                        value = null,
+                        active = panel == PlayerPanel.SERVERS,
+                        onClick = { onPanel(PlayerPanel.SERVERS) },
+                    )
+                }
             }
         }
 
@@ -831,17 +1034,17 @@ private fun ControlsOverlay(
             ) {
                 when (panel) {
                     PlayerPanel.SPEED -> SpeedPanel(current = speed, onSelect = onSpeed)
-                    PlayerPanel.SUBTITLES -> SubtitlesPanel(
-                        tracks = tracks,
-                        onOff = onSubtitleOff,
-                        onSelect = onSubtitleSelect,
-                    )
-                    PlayerPanel.SETTINGS -> LanguageServerPanel(
+                    PlayerPanel.AUDIO -> AudioPanel(
                         state = state,
-                        onLanguage = onLanguage,
-                        onServer = onServer,
-                        onReport = onReport,
+                        audioTracks = audioTracks,
+                        subtitleTracks = subtitleTracks,
+                        onSelectAudioTrack = onSelectAudioTrack,
+                        onSelectSourceLanguage = onSelectSourceLanguage,
+                        onSubtitleOff = onSubtitleOff,
+                        onSubtitleSelect = onSubtitleSelect,
                     )
+                    PlayerPanel.SERVERS -> ServerPanel(state = state, onServer = onServer)
+                    PlayerPanel.QUALITY -> QualityPanel(state = state, onServer = onServer)
                     else -> EpisodePanel(state = state, onSelectEpisode = onSelectEpisode)
                 }
             }
@@ -850,111 +1053,194 @@ private fun ControlsOverlay(
 }
 
 @Composable
-private fun PlayerChip(text: String, onClick: () -> Unit, active: Boolean) {
+private fun PlayerActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String?,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
     Surface(
         onClick = onClick,
-        color = if (active) MaterialTheme.colorScheme.primary
-        else Color.White.copy(alpha = 0.16f),
-        shape = RoundedCornerShape(50),
+        color = if (active) Color(0xFFF4B84A).copy(alpha = 0.25f)
+        else Color.Black.copy(alpha = 0.46f),
+        shape = RoundedCornerShape(12.dp),
     ) {
-        Text(
-            text = text,
-            color = Color.White,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (active) Color(0xFFF4B84A) else Color.White,
+                modifier = Modifier.size(17.dp),
+            )
+            Column {
+                Text(label, color = Color.White, fontSize = 10.sp, maxLines = 1)
+                if (value != null) {
+                    Text(
+                        value,
+                        color = Color.White.copy(alpha = 0.66f),
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 
-/** Three tabs of the settings panel: Language, Server and Quality come from the same list. */
 @Composable
-private fun LanguageServerPanel(
+private fun AudioPanel(
     state: PlayerUiState,
-    onLanguage: (String) -> Unit,
-    onServer: (MediaSource) -> Unit,
-    onReport: () -> Unit,
+    audioTracks: List<TrackChoice>,
+    subtitleTracks: List<TrackChoice>,
+    onSelectAudioTrack: (TrackChoice) -> Unit,
+    onSelectSourceLanguage: (String) -> Unit,
+    onSubtitleOff: () -> Unit,
+    onSubtitleSelect: (Int, Int) -> Unit,
 ) {
-    // Design `.pn`: three tabs (Language / Server / Quality) above the list, rows on the
-    // elevated surface with the selected one on a translucent accent.
-    var tab by remember { mutableStateOf(0) }
-    val tabLabels = listOf(
-        stringRes(R.string.sheet_languages),
-        stringRes(R.string.sheet_servers),
-        stringRes(R.string.chip_quality),
-    )
-
-    Column(modifier = Modifier.padding(14.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            tabLabels.forEachIndexed { index, label ->
-                DesignChip(
-                    text = label,
-                    selected = tab == index,
-                    onClick = { tab = index },
-                )
-            }
+    val sourceLanguages = state.languages.filter { language ->
+        audioTracks.none { track ->
+            track.label?.equals(language, ignoreCase = true) == true
         }
-
-        Spacer(Modifier.height(12.dp))
-        when (tab) {
-            0 -> {
+    }
+    Column(
+        modifier = Modifier
+            .heightIn(max = 420.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(14.dp),
+    ) {
+        Text(stringRes(R.string.audio_label), fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+        Spacer(Modifier.height(6.dp))
+        if (audioTracks.isEmpty() && sourceLanguages.isEmpty()) {
+            Text(
+                stringRes(R.string.player_no_audio_tracks),
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.58f),
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
+        audioTracks.forEach { track ->
+            PanelRow(
+                label = track.label(R.string.player_audio_track),
+                trailing = null,
+                selected = track.selected,
+                onClick = { onSelectAudioTrack(track) },
+            )
+        }
+        if (sourceLanguages.isNotEmpty()) {
+            if (audioTracks.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    text = stringRes(R.string.sheet_languages),
+                    stringRes(R.string.player_audio_streams),
                     fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Color.White.copy(alpha = 0.58f),
                 )
-                Spacer(Modifier.height(6.dp))
-                state.languages.take(8).forEach { language ->
-                    PanelRow(
-                        label = SourceSelection.languageLabel(language, false),
-                        trailing = null,
-                        selected = language == state.languageKey,
-                        onClick = { onLanguage(language) },
-                    )
-                }
             }
-            1 -> {
-                state.alternatives.take(8).forEach { server ->
-                    val supported = CodecSupport.isSupported(server.codec)
-                    PanelRow(
-                        label = listOfNotNull(
-                            server.serverLabel,
-                            SourceSelection.qualityLabel(server.quality),
-                            server.codecLabel,
-                        ).joinToString(" · "),
-                        trailing = if (supported) null
-                        else stringRes(R.string.unsupported_on_phone),
-                        selected = server.mediaUrl == state.source?.mediaUrl,
-                        supported = supported,
-                        onClick = { onServer(server) },
-                    )
+            sourceLanguages.forEach { language ->
+                val source = state.alternatives.firstOrNull {
+                    SourceSelection.keyOf(it).equals(language, ignoreCase = true)
                 }
-            }
-            else -> {
-                state.alternatives
-                    .groupBy { SourceSelection.qualityLabel(it.quality) }
-                    .forEach { (quality, servers) ->
-                        val supported = servers.any { CodecSupport.isSupported(it.codec) }
-                        val target = servers.firstOrNull { CodecSupport.isSupported(it.codec) }
-                            ?: servers.first()
-                        PanelRow(
-                            label = quality,
-                            trailing = if (supported) null
-                            else stringRes(R.string.unsupported_on_phone),
-                            selected = servers.any { it.mediaUrl == state.source?.mediaUrl },
-                            supported = supported,
-                            onClick = { onServer(target) },
-                        )
-                    }
+                PanelRow(
+                    label = SourceSelection.languageLabel(language, source?.isDub == true),
+                    trailing = null,
+                    selected = language.equals(state.languageKey, ignoreCase = true),
+                    onClick = { onSelectSourceLanguage(language) },
+                )
             }
         }
 
         Spacer(Modifier.height(12.dp))
         Text(
-            text = stringRes(R.string.report_problem),
+            stringRes(R.string.player_no_subtitles),
             fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable(onClick = onReport),
+            color = Color.White.copy(alpha = 0.7f),
         )
+        Spacer(Modifier.height(6.dp))
+        PanelRow(
+            label = stringRes(R.string.subtitles_off),
+            trailing = null,
+            selected = subtitleTracks.none { it.selected },
+            onClick = onSubtitleOff,
+        )
+        subtitleTracks.forEach { track ->
+            PanelRow(
+                label = track.label(R.string.player_subtitle_track),
+                trailing = null,
+                selected = track.selected,
+                onClick = { onSubtitleSelect(track.groupIndex, track.trackIndex) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServerPanel(state: PlayerUiState, onServer: (MediaSource) -> Unit) {
+    Column(
+        modifier = Modifier
+            .heightIn(max = 420.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(14.dp),
+    ) {
+        Text(stringRes(R.string.sheet_servers), fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+        Spacer(Modifier.height(8.dp))
+        if (state.alternatives.isEmpty()) {
+            Text(
+                stringRes(R.string.player_no_alternative_servers),
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.58f),
+            )
+        }
+        state.alternatives.take(8).forEach { server ->
+            val supported = CodecSupport.isSupported(server.codec)
+            PanelRow(
+                label = listOfNotNull(
+                    server.serverLabel,
+                    SourceSelection.qualityLabel(server.quality),
+                    server.codecLabel,
+                ).joinToString(" · "),
+                trailing = if (supported) null else stringRes(R.string.unsupported_on_phone),
+                selected = server.mediaUrl == state.source?.mediaUrl,
+                supported = supported,
+                onClick = { onServer(server) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun QualityPanel(state: PlayerUiState, onServer: (MediaSource) -> Unit) {
+    val qualities = state.alternatives.groupBy { SourceSelection.qualityLabel(it.quality) }
+    Column(
+        modifier = Modifier
+            .heightIn(max = 420.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(14.dp),
+    ) {
+        Text(stringRes(R.string.chip_quality), fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+        Spacer(Modifier.height(8.dp))
+        if (qualities.isEmpty()) {
+            Text(
+                stringRes(R.string.player_no_alternative_servers),
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.58f),
+            )
+        }
+        qualities.forEach { (quality, servers) ->
+            val supportedServers = servers.filter { CodecSupport.isSupported(it.codec) }
+            val target = supportedServers.firstOrNull() ?: servers.first()
+            PanelRow(
+                label = quality,
+                trailing = null,
+                selected = servers.any { it.mediaUrl == state.source?.mediaUrl },
+                supported = supportedServers.isNotEmpty(),
+                onClick = { onServer(target) },
+            )
+        }
     }
 }
 
@@ -1038,48 +1324,6 @@ private fun SpeedPanel(current: Float, onSelect: (Float) -> Unit) {
 }
 
 @Composable
-private fun SubtitlesPanel(
-    tracks: Tracks,
-    onOff: () -> Unit,
-    onSelect: (Int, Int) -> Unit,
-) {
-    val subtitleGroups = tracks.groups.withIndex()
-        .filter { it.value.type == C.TRACK_TYPE_TEXT }
-    Column(modifier = Modifier.padding(14.dp)) {
-        Text(
-            text = stringRes(R.string.player_no_subtitles),
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.7f),
-        )
-        Spacer(Modifier.height(8.dp))
-        PanelRow(
-            label = stringRes(R.string.subtitles_off),
-            trailing = null,
-            selected = subtitleGroups.none { indexed ->
-                (0 until indexed.value.length).any(indexed.value::isTrackSelected)
-            },
-            onClick = onOff,
-        )
-        subtitleGroups.forEach { indexed ->
-            val groupIndex = indexed.index
-            val group = indexed.value
-            for (trackIndex in 0 until group.length) {
-                val format = group.getTrackFormat(trackIndex)
-                val label = format.label?.takeIf { it.isNotBlank() }
-                    ?: format.language?.takeIf { it.isNotBlank() }
-                    ?: "Track ${trackIndex + 1}"
-                PanelRow(
-                    label = label,
-                    trailing = null,
-                    selected = group.isTrackSelected(trackIndex),
-                    onClick = { onSelect(groupIndex, trackIndex) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun EpisodePlaylist(
     state: PlayerUiState,
     modifier: Modifier = Modifier,
@@ -1087,7 +1331,7 @@ private fun EpisodePlaylist(
 ) {
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color(0xFF08130F))
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Text(

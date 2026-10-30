@@ -143,6 +143,7 @@
     <string name="chip_lock">লক</string>
     <string name="player_locked">কন্ট্রোল লক করা</string>
     <string name="player_unlock">আনলক করতে চাপ দিন</string>
+    <string name="player_lock_prompt">লক করতে চাপ দিন</string>
     <string name="player_fullscreen">ফুলস্ক্রিন চালু</string>
     <string name="player_exit_fullscreen">ফুলস্ক্রিন বন্ধ</string>
     <string name="player_episode_playlist">পর্বের তালিকা</string>
@@ -161,6 +162,14 @@
     <string name="text_size_large">বড়</string>
     <string name="quality_auto">অটো</string>
     <string name="audio_tracks">অডিও ট্র্যাক</string>
+    <string name="player_fit">ফিট</string>
+    <string name="player_fill">ফিল</string>
+    <string name="player_audio_track">অডিও ট্র্যাক %1$d</string>
+    <string name="player_subtitle_track">সাবটাইটেল ট্র্যাক %1$d</string>
+    <string name="player_no_audio_tracks">অন্য কোনো অডিও বা ভাষার ট্র্যাক নেই</string>
+    <string name="player_audio_streams">অন্য ভাষার স্ট্রিম</string>
+    <string name="player_no_alternative_servers">অন্য কোনো সার্ভার নেই</string>
+    <string name="player_settings">সেটিংস</string>
 
     <!-- Downloads -->
     <string name="downloads_storage_used">ব্যবহৃত জায়গা: %1$s</string>
