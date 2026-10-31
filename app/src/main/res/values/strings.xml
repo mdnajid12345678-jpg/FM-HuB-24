@@ -180,6 +180,8 @@
     <string name="player_subtitle_download">Download subtitles</string>
     <string name="player_subtitle_download_running">Preparing subtitle download…</string>
     <string name="player_subtitle_download_started">Subtitle download started</string>
+    <string name="player_subtitle_download_transferring">Downloading subtitles…</string>
+    <string name="player_subtitle_download_complete">Subtitle download complete</string>
     <string name="player_subtitle_download_failed">This stream does not expose a downloadable subtitle track.</string>
     <string name="player_subtitle_download_error">Subtitle download failed. Check the connection and try again.</string>
     <string name="player_subtitle_delay_value">%1$s sec</string>

@@ -27,8 +27,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /** Playback readiness: sources are read fresh, then the player is built (spec 5.2 rule 3). */
 data class PlayerUiState(
@@ -53,7 +55,7 @@ data class PlayerUiState(
         get() = episode?.let { "S${it.seasonNumber} E${it.episodeNumber}" }.orEmpty()
 }
 
-enum class SubtitleDownloadStatus { IDLE, DOWNLOADING, STARTED, UNAVAILABLE, FAILED }
+enum class SubtitleDownloadStatus { IDLE, PREPARING, DOWNLOADING, STARTED, COMPLETED, UNAVAILABLE, FAILED }
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -83,8 +85,25 @@ class PlayerViewModel @Inject constructor(
     val reportResult: StateFlow<String?> = reportMessage
     private val subtitleDownloadMessage = MutableStateFlow(SubtitleDownloadStatus.IDLE)
     val subtitleDownloadStatus: StateFlow<SubtitleDownloadStatus> = subtitleDownloadMessage
+    private var activeSubtitleRequestId: String? = null
 
     init {
+        viewModelScope.launch {
+            DownloadEngine.states.collect { downloadStates ->
+                val id = activeSubtitleRequestId ?: return@collect
+                when (downloadStates[id]?.phase) {
+                    com.fmhub24.android.stream.DownloadState.Phase.QUEUED ->
+                        subtitleDownloadMessage.value = SubtitleDownloadStatus.STARTED
+                    com.fmhub24.android.stream.DownloadState.Phase.DOWNLOADING ->
+                        subtitleDownloadMessage.value = SubtitleDownloadStatus.DOWNLOADING
+                    com.fmhub24.android.stream.DownloadState.Phase.COMPLETED ->
+                        subtitleDownloadMessage.value = SubtitleDownloadStatus.COMPLETED
+                    com.fmhub24.android.stream.DownloadState.Phase.FAILED ->
+                        subtitleDownloadMessage.value = SubtitleDownloadStatus.FAILED
+                    else -> Unit
+                }
+            }
+        }
         prepare()
     }
 
@@ -455,11 +474,14 @@ class PlayerViewModel @Inject constructor(
             subtitleDownloadMessage.value = SubtitleDownloadStatus.UNAVAILABLE
             return
         }
-        subtitleDownloadMessage.value = SubtitleDownloadStatus.DOWNLOADING
+        subtitleDownloadMessage.value = SubtitleDownloadStatus.PREPARING
         viewModelScope.launch {
             try {
                 val target = current.episode?.key ?: "movie"
-                val id = "subtitle-${(contentId + target + language).hashCode()}"
+                val id = "subtitle-${UUID.nameUUIDFromBytes(
+                    "$contentId|$target|${source.mediaUrl}|$language".toByteArray(Charsets.UTF_8),
+                )}"
+                activeSubtitleRequestId = id
                 val request = DownloadAnalyzer.buildSubtitleRequest(
                     context = context,
                     id = id,

@@ -2355,8 +2355,10 @@ private fun LandscapeAudioPanel(
             }
             val statusText = when (downloadStatus) {
                 SubtitleDownloadStatus.IDLE -> null
-                SubtitleDownloadStatus.DOWNLOADING -> stringRes(R.string.player_subtitle_download_running)
+                SubtitleDownloadStatus.PREPARING -> stringRes(R.string.player_subtitle_download_running)
+                SubtitleDownloadStatus.DOWNLOADING -> stringRes(R.string.player_subtitle_download_transferring)
                 SubtitleDownloadStatus.STARTED -> stringRes(R.string.player_subtitle_download_started)
+                SubtitleDownloadStatus.COMPLETED -> stringRes(R.string.player_subtitle_download_complete)
                 SubtitleDownloadStatus.UNAVAILABLE -> stringRes(R.string.player_subtitle_download_failed)
                 SubtitleDownloadStatus.FAILED -> stringRes(R.string.player_subtitle_download_error)
             }

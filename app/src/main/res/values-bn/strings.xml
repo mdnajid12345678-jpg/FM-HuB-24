@@ -179,6 +179,8 @@
     <string name="player_subtitle_download">সাবটাইটেল ডাউনলোড</string>
     <string name="player_subtitle_download_running">সাবটাইটেল ডাউনলোড প্রস্তুত হচ্ছে…</string>
     <string name="player_subtitle_download_started">সাবটাইটেল ডাউনলোড শুরু হয়েছে</string>
+    <string name="player_subtitle_download_transferring">সাবটাইটেল ডাউনলোড হচ্ছে…</string>
+    <string name="player_subtitle_download_complete">সাবটাইটেল ডাউনলোড সম্পূর্ণ হয়েছে</string>
     <string name="player_subtitle_download_failed">এই স্ট্রিমে ডাউনলোডযোগ্য সাবটাইটেল ট্র্যাক নেই।</string>
     <string name="player_subtitle_download_error">সাবটাইটেল ডাউনলোড ব্যর্থ হয়েছে। সংযোগ দেখে আবার চেষ্টা করুন।</string>
     <string name="player_subtitle_delay_value">%1$s সেকেন্ড</string>
