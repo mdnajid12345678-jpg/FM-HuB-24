@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.fmhub24.android.R
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.ui.screens.explore.ExploreViewModel
@@ -33,6 +34,7 @@ fun SearchScreen(
     val results by viewModel.results.collectAsState()
     val recent by viewModel.recentSearches.collectAsState()
     val genres by viewModel.genres.collectAsState()
+    val keyboard = LocalSoftwareKeyboardController.current
 
     fun open(item: MediaItem) {
         viewModel.openItem(item)
@@ -65,10 +67,14 @@ fun SearchScreen(
             suggestionChips = genres,
             trending = results.take(10),
             onQueryChange = viewModel::setQuery,
-            onSubmit = viewModel::submitSearch,
+            onSubmit = {
+                viewModel.submitSearch()
+                keyboard?.hide()
+            },
             onRemoveRecent = viewModel::removeRecent,
             onClearRecents = viewModel::clearRecents,
             onOpenItem = ::open,
+            matchResultsAsList = true,
         )
     }
 }

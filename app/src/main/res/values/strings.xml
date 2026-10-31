@@ -254,6 +254,8 @@
     <string name="live_badge">LIVE</string>
 
     <!-- Profile -->
+    <string name="profile_space_title">Your space</string>
+    <string name="profile_space_subtitle">Lists, history and app settings</string>
     <string name="my_list_title">My list</string>
     <string name="history_title">History</string>
     <string name="playback_title">Playback</string>
@@ -268,6 +270,8 @@
     <string name="recent_searches">Recent searches</string>
     <string name="popular_searches">Popular</string>
     <string name="search_hint">Search movies, series, anime</string>
+    <string name="search_match_count">%1$d MATCHES</string>
+    <string name="settings_storage_used">Storage used</string>
     <string name="empty_my_list_title">Your list is empty</string>
     <string name="empty_my_list_detail">Add titles from their details page.</string>
     <string name="empty_history_title">Nothing watched yet</string>

@@ -1,6 +1,7 @@
 package com.fmhub24.android.ui.screens.search
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -51,8 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fmhub24.android.R
 import com.fmhub24.android.data.model.MediaItem
+import com.fmhub24.android.data.model.ContentType
 import com.fmhub24.android.ui.components.EmptyState
 import com.fmhub24.android.ui.components.PosterCard
+import com.fmhub24.android.ui.components.RemoteImage
 import com.fmhub24.android.ui.components.SelectChip
 import com.fmhub24.android.ui.components.stringRes
 
@@ -77,6 +83,7 @@ fun SearchBody(
     onClearRecents: () -> Unit,
     onOpenItem: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
+    matchResultsAsList: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     val showRecents = focused && query.isBlank() && recent.isNotEmpty()
@@ -90,13 +97,22 @@ fun SearchBody(
             onValueChange = onQueryChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = if (matchResultsAsList) 18.dp else 16.dp)
                 .onFocusChanged { state -> focused = state.isFocused },
             placeholder = { Text(stringRes(R.string.search_hint), fontSize = 13.sp) },
             singleLine = true,
-            shape = RoundedCornerShape(10.dp),
+            shape = if (matchResultsAsList) RoundedCornerShape(28.dp) else RoundedCornerShape(10.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+            leadingIcon = if (matchResultsAsList) {
+                {
+                    Icon(
+                        Icons.Outlined.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            } else null,
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }) {
@@ -105,7 +121,7 @@ fun SearchBody(
                             contentDescription = stringRes(R.string.action_clear),
                         )
                     }
-                } else {
+                } else if (!matchResultsAsList) {
                     Icon(
                         Icons.Outlined.Search,
                         contentDescription = stringRes(R.string.action_search),
@@ -114,7 +130,7 @@ fun SearchBody(
             },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = if (matchResultsAsList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -138,13 +154,17 @@ fun SearchBody(
             SuggestionChips(chips = suggestionChips, onPick = { onQueryChange(it) })
         }
 
-        if (showSuggestions) {
+        if (matchResultsAsList && query.isNotBlank()) {
+            SearchMatchResults(query = query, results = results, onOpenItem = onOpenItem)
+        } else if (showSuggestions) {
             SuggestionList(
                 suggestions = suggestions,
                 query = query,
                 onFill = { onQueryChange(it) },
                 onOpen = onOpenItem,
             )
+        } else if (matchResultsAsList) {
+            Spacer(Modifier.weight(1f))
         } else if (showNoResults) {
             NoResults(query = query, trending = trending, onOpenItem = onOpenItem)
         } else {
@@ -371,4 +391,93 @@ private fun highlight(query: String, text: String): AnnotatedString {
             append(text.substring(index + needle.length))
         }
     }.toAnnotatedString()
+}
+
+@Composable
+private fun SearchMatchResults(
+    query: String,
+    results: List<MediaItem>,
+    onOpenItem: (MediaItem) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Text(
+            text = stringRes(R.string.search_match_count, results.size),
+            fontSize = 11.sp,
+            letterSpacing = 0.8.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 15.dp, bottom = 10.dp),
+        )
+        if (results.isEmpty()) {
+            NoResults(query = query, trending = emptyList(), onOpenItem = onOpenItem)
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
+            ) {
+                items(results, key = { it.id }) { item ->
+                    SearchMatchRow(item = item, query = query, onClick = { onOpenItem(item) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchMatchRow(item: MediaItem, query: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RemoteImage(
+            url = item.posterUrl,
+            contentDescription = item.title,
+            modifier = Modifier.width(54.dp),
+            aspectRatio = 2f / 3f,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = highlight(query = query, text = item.title),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(3.dp))
+            val metadata = listOfNotNull(
+                contentTypeLabel(item.contentType),
+                item.releaseYear?.toString(),
+            ).joinToString(" · ")
+            Text(
+                text = metadata,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            Icons.Outlined.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun contentTypeLabel(type: ContentType): String = when (type) {
+    ContentType.MOVIE, ContentType.ANIME_MOVIE -> stringRes(R.string.category_movies)
+    ContentType.SERIES, ContentType.ASIAN_DRAMA, ContentType.CARTOON -> stringRes(R.string.section_series)
+    ContentType.ANIME_SERIES, ContentType.OVA -> stringRes(R.string.section_anime)
+    ContentType.DOCUMENTARY -> stringRes(R.string.section_documentary)
+    ContentType.LIVE -> stringRes(R.string.section_live_tv)
+    ContentType.OTHER -> stringRes(R.string.type_other)
 }

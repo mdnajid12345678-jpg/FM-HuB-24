@@ -253,6 +253,8 @@
     <string name="live_badge">লাইভ</string>
 
     <!-- Profile -->
+    <string name="profile_space_title">আপনার জায়গা</string>
+    <string name="profile_space_subtitle">তালিকা, ইতিহাস ও অ্যাপ সেটিংস</string>
     <string name="my_list_title">আমার তালিকা</string>
     <string name="history_title">হিস্ট্রি</string>
     <string name="playback_title">প্লেব্যাক</string>
@@ -267,6 +269,8 @@
     <string name="recent_searches">সাম্প্রতিক অনুসন্ধান</string>
     <string name="popular_searches">জনপ্রিয়</string>
     <string name="search_hint">মুভি, সিরিজ, অ্যানিমে খুঁজুন</string>
+    <string name="search_match_count">%1$dটি মিল</string>
+    <string name="settings_storage_used">ব্যবহৃত স্টোরেজ</string>
     <string name="empty_my_list_title">আপনার তালিকা খালি</string>
     <string name="empty_my_list_detail">শিরোনামের পেজ থেকে যোগ করুন।</string>
     <string name="empty_history_title">এখনো কিছু দেখা হয়নি</string>
