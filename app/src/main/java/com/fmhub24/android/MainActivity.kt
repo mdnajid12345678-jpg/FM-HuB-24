@@ -36,10 +36,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Called by the player destination so PiP never starts on unrelated screens. */
+    /**
+     * Called by the player destination so PiP never starts on unrelated screens. The player
+     * screen now also clears the flag in its onDispose (bug #6), so navigating back from the
+     * player always resets the state even when no explicit exit callback runs.
+     */
     fun setPlayerActive(active: Boolean) {
         playerActive = active
         updatePictureInPictureParams()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Safety net: leaving the activity while no player screen is on top must not leave
+        // stale PiP auto-enter params behind (bug #6).
+        if (isChangingConfigurations) {
+            updatePictureInPictureParams()
+        }
     }
 
     override fun onUserLeaveHint() {

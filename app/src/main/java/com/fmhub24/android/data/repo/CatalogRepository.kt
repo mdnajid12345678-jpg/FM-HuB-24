@@ -32,8 +32,17 @@ class CatalogRepository @Inject constructor(
     @Volatile private var lastSuccessfulRefreshMs = 0L
     val contents: Flow<List<MediaItem>> = dao.observeContents().map { rows -> rows.map(::toMediaItem) }
 
-    fun search(query: String): Flow<List<MediaItem>> = dao.observeSearch(query)
-        .map { rows -> rows.map(::toMediaItem) }
+    /**
+     * Escapes the LIKE wildcards the user may type, so "100%" searches for the literal
+     * text "100%" instead of matching everything. Paired with ESCAPE '\' in the DAO query.
+     */
+    fun escapeForLike(query: String): String = query
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+
+    fun search(rawQuery: String): Flow<List<MediaItem>> =
+        dao.observeSearch(escapeForLike(rawQuery)).map { rows -> rows.map(::toMediaItem) }
 
     suspend fun cachedContent(id: String): MediaItem? = dao.content(id)?.let(::toMediaItem)
 
@@ -73,6 +82,10 @@ class CatalogRepository @Inject constructor(
                         "offset" to offset.toString(),
                     ),
                 )
+                // A short page still ends pagination; the snapshot is only complete when the
+                // last page was full and nothing more follows. The previous version broke out
+                // of the loop before offset advanced, so a partial page marked the snapshot
+                // complete even though later pages were never requested.
                 if (page.isEmpty()) break
                 val rows = page.mapNotNull(::contentFromJson)
                 if (rows.isNotEmpty()) dao.upsertContents(rows)
@@ -80,14 +93,14 @@ class CatalogRepository @Inject constructor(
                     currentIds += row.id
                     if (cachedById[row.id]?.updatedAt != row.updatedAt) structureIds += row.id
                 }
-                if (page.size < PAGE_SIZE) break
                 offset += PAGE_SIZE
+                if (page.size < PAGE_SIZE) break
                 if (offset >= MAX_ROWS) {
                     completeSnapshot = false
                     break
                 }
             }
-            // Never infer deletion from a capped or failed snapshot.
+            // Never infer deletion from a capped snapshot.
             if (completeSnapshot) {
                 dao.contents().filter { it.id !in currentIds }.forEach { stale ->
                     dao.clearSeasons(stale.id)
@@ -111,7 +124,7 @@ class CatalogRepository @Inject constructor(
         return try {
             val rows = rest.select(
                 table = "media_contents",
-                query = listOf("select" to "*", "id" to "eq.$id"),
+                query = listOf("select" to "*", "id" to "eq.${rest.filterValue(id)}"),
             )
             rows.mapNotNull(::contentFromJson).forEach { dao.upsertContents(listOf(it)) }
             null
@@ -141,7 +154,7 @@ class CatalogRepository @Inject constructor(
 
     private suspend fun syncStructureBatch(contentIds: List<String>): DataException? {
         return try {
-            val filter = contentIds.joinToString(",") { "\"$it\"" }
+            val filter = contentIds.joinToString(",") { "\"${rest.filterValue(it)}\"" }
             val seasons = rest.select(
                 table = "seasons",
                 query = listOf("select" to "*", "content_id" to "in.($filter)", "order" to "season_number.asc"),
@@ -271,10 +284,13 @@ class CatalogRepository @Inject constructor(
             val contentId = optText(json, "content_id") ?: return null
             val seasonNumber = optInt(json, "season_number") ?: 0
             val episodeNumber = optInt(json, "episode_number") ?: 0
+            // The remote episode id is part of the key so duplicate episode_number rows in the
+            // same season no longer overwrite each other via REPLACE (bug #3).
+            val episodeId = rowId(json)
             return EpisodeEntity(
-                key = "$contentId|$seasonNumber|$episodeNumber",
+                key = "$contentId|$seasonNumber|$episodeNumber|${episodeId.orEmpty()}",
                 contentId = contentId,
-                episodeId = rowId(json),
+                episodeId = episodeId,
                 seasonNumber = seasonNumber,
                 episodeNumber = episodeNumber,
                 title = optText(json, "title"),
