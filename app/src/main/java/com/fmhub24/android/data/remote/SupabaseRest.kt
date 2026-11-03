@@ -2,6 +2,7 @@ package com.fmhub24.android.data.remote
 
 import com.fmhub24.android.BuildConfig
 import com.fmhub24.android.data.model.DataException
+import android.util.Log
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -36,6 +37,13 @@ class SupabaseRest @Inject constructor(
     private var sessionBackoffUntilMs: Long = 0L
 
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && anonKey.isNotBlank()
+
+    /**
+     * Escapes a value used inside a PostgREST filter (`eq.`, `in.(...)`). Quotes, commas and
+     * backslashes in ids would otherwise break the filter syntax and turn into HTTP 400s.
+     */
+    fun filterValue(value: String): String =
+        value.replace("\\", "\\\\").replace("\"", "\\\"").replace(",", "\\,")
 
     /** GET one table as JSON rows. [query] holds PostgREST query parameters. */
     suspend fun select(
@@ -146,11 +154,15 @@ class SupabaseRest @Inject constructor(
     /**
      * The token a read runs with: an anonymous session when sign-in works, otherwise the
      * publishable key itself, which PostgREST executes as the `anon` role. The catalog read
-     * policies cover both roles, so a failed sign-in can never blank the catalog.
+     * policies cover both roles, so a failed sign-in can never blank the catalog. The silent
+     * downgrade is now logged once per backoff window so it is visible in debugging (bug #5).
      */
     private suspend fun readToken(): String = try {
         validSession().accessToken
-    } catch (_: DataException) {
+    } catch (error: DataException) {
+        if (sessionBackoffUntilMs > System.currentTimeMillis()) {
+            Log.w(TAG, "Falling back to anon role reads after auth failure: ${error.message}")
+        }
         anonKey
     }
 
@@ -231,6 +243,7 @@ class SupabaseRest @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "SupabaseRest"
         const val REQUEST_TIMEOUT_SECONDS = 30L
         const val SIGNUP_BACKOFF_MS = 60_000L
 
