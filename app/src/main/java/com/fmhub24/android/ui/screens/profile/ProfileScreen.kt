@@ -131,7 +131,7 @@ fun ProfileScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringRes(R.string.continue_watching_title),
+                    text = stringRes(R.string.section_continue_watching),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -139,7 +139,7 @@ fun ProfileScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = stringRes(R.string.see_all),
+                    text = stringRes(R.string.action_see_all),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -241,7 +241,7 @@ private fun ContinueWatchingCard(entry: HistoryEntry, onClick: () -> Unit) {
             ) {
                 Icon(
                     Icons.Outlined.PlayArrow,
-                    contentDescription = stringRes(R.string.continue_watching_title),
+                    contentDescription = stringRes(R.string.section_continue_watching),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.padding(7.dp),
                 )
