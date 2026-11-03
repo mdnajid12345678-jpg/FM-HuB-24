@@ -51,7 +51,9 @@ interface CatalogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEpisodes(items: List<EpisodeEntity>)
 
-    @Query("SELECT * FROM media_contents WHERE title LIKE '%' || :query || '%' OR IFNULL(originalTitle, '') LIKE '%' || :query || '%' ORDER BY title")
+    // The caller must escape the query with CatalogRepository.escapeForLike; ESCAPE '\' makes
+    // user-typed %, _ and \ literal instead of SQL wildcards.
+    @Query("SELECT * FROM media_contents WHERE title LIKE '%' || :query || '%' ESCAPE '\\' OR IFNULL(originalTitle, '') LIKE '%' || :query || '%' ESCAPE '\\' ORDER BY title")
     fun observeSearch(query: String): Flow<List<MediaContentEntity>>
 }
 
