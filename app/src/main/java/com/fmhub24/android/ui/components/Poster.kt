@@ -1,22 +1,33 @@
 package com.fmhub24.android.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fmhub24.android.data.model.MediaItem
 
-/** 2:3 poster card. Home rows show the poster only; grids add the title below. */
+private val PosterShape = RoundedCornerShape(12.dp)
+
+/** 2:3 poster card with rounded corners, a soft shadow and a press-scale animation. */
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -24,12 +35,25 @@ fun PosterCard(
     modifier: Modifier = Modifier,
     showTitle: Boolean = false,
 ) {
-    Column(modifier = modifier.clickable(onClick = onClick)) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "posterPress",
+    )
+    Column(
+        modifier = modifier
+            .scale(scale)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+    ) {
         RemoteImage(
             url = item.posterUrl,
             contentDescription = item.title,
             aspectRatio = 2f / 3f,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(PosterShape),
         )
         if (showTitle) {
             Spacer(Modifier.height(6.dp))
@@ -60,7 +84,7 @@ fun LandscapeThumb(
     modifier: Modifier = Modifier,
     progress: Float? = null,
 ) {
-    Box(modifier = modifier) {
+    Box(modifier = modifier.clip(PosterShape)) {
         RemoteImage(
             url = url,
             contentDescription = contentDescription,
