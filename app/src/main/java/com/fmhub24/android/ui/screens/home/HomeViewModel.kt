@@ -7,6 +7,8 @@ import com.fmhub24.android.data.model.HomeCategory
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.inCategory
 import com.fmhub24.android.data.repo.CatalogRepository
+import com.fmhub24.android.data.repo.HistoryEntry
+import com.fmhub24.android.data.repo.WatchStateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ data class HomeUiState(
     val loading: Boolean = true,
     val error: DataException? = null,
     val items: List<MediaItem> = emptyList(),
+    val continueWatching: List<HistoryEntry> = emptyList(),
 ) {
     val isEmpty: Boolean get() = items.isEmpty()
 }
@@ -30,19 +33,22 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val catalog: CatalogRepository,
+    watchState: WatchStateRepository,
 ) : ViewModel() {
     private val loading = MutableStateFlow(true)
     private val error = MutableStateFlow<DataException?>(null)
 
     val state: StateFlow<HomeUiState> = combine(
         catalog.contents,
+        watchState.history,
         loading,
         error,
-    ) { items, isLoading, failure ->
+    ) { items, history, isLoading, failure ->
         HomeUiState(
             loading = isLoading,
             error = failure,
             items = items,
+            continueWatching = history.filter { entry -> items.any { it.id == entry.contentId } },
         )
     }.stateIn(
         scope = viewModelScope,
