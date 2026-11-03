@@ -341,10 +341,12 @@ object DownloadEngine {
             Download.STATE_RESTARTING -> DownloadState.Phase.QUEUED
             else -> DownloadState.Phase.UNKNOWN
         },
-        percent = if (contentLength > 0) {
-            (getPercentDownloaded() / 100f).coerceIn(0f, 1f)
-        } else {
-            0f
+        // Bug #4 fix: Media3's getPercentDownloaded() also reports progress for unknown-length
+        // downloads (bytes/estimate). The old contentLength>0 gate kept those rows stuck at 0%.
+        percent = when {
+            state == Download.STATE_COMPLETED -> 1f
+            getPercentDownloaded() >= 0f -> (getPercentDownloaded() / 100f).coerceIn(0f, 1f)
+            else -> 0f
         },
         bytesDownloaded = getBytesDownloaded(),
         bytesTotal = contentLength.coerceAtLeast(0L),
