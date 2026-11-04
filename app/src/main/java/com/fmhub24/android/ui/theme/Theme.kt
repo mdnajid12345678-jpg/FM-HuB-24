@@ -8,6 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.fmhub24.android.data.ThemeMode
 
+// Secondary text on dark surfaces: warm grey-green, tuned for the forest palette (was violet-tinted).
+private val DarkMutedText = Color(0xFF9BAAA2)
+
 private val DarkColors = darkColorScheme(
     primary = DarkPrimary,
     onPrimary = DarkPrimaryText,
@@ -21,7 +24,7 @@ private val DarkColors = darkColorScheme(
     surface = DarkSurface,
     onSurface = Color.White,
     surfaceVariant = DarkElevated,
-    onSurfaceVariant = Color(0xFFADADC9),
+    onSurfaceVariant = DarkMutedText,
     outline = Color.White.copy(alpha = 0.12f),
     error = DarkDanger,
 )

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
@@ -45,7 +48,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.fmhub24.android.R
 import com.fmhub24.android.data.ThemeMode
+import com.fmhub24.android.data.repo.HistoryEntry
 import com.fmhub24.android.ui.PreferencesViewModel
+import com.fmhub24.android.ui.components.LandscapeThumb
 import com.fmhub24.android.ui.components.stringRes
 
 @Composable
@@ -54,10 +59,16 @@ fun ProfileScreen(
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenDetails: (String) -> Unit,
+    onPlay: (HistoryEntry) -> Unit,
     preferences: PreferencesViewModel = hiltViewModel(),
+    data: ProfileDataViewModel = hiltViewModel(),
 ) {
     val settings by preferences.settings.collectAsState(initial = null)
+    val history by data.history.collectAsState(initial = emptyList())
     val cardShape = RoundedCornerShape(22.dp)
+    // Only entries that are part-way through count as "continue watching".
+    val continueWatching = history.filter { it.progress > 0.01f && it.progress < 0.98f }
 
     Column(
         modifier = Modifier
@@ -108,6 +119,37 @@ fun ProfileScreen(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+        }
+
+        // Continue watching lives here now (moved from Home); it shows nothing when empty.
+        if (continueWatching.isNotEmpty()) {
+            Spacer(Modifier.height(18.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenHistory),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringRes(R.string.section_continue_watching),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 9.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = stringRes(R.string.action_see_all),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+            ) {
+                items(continueWatching, key = { it.key }) { entry ->
+                    ContinueWatchingCard(entry = entry, onClick = { onPlay(entry) })
                 }
             }
         }
@@ -172,6 +214,54 @@ fun ProfileScreen(
             )
         }
         Spacer(Modifier.height(18.dp))
+    }
+}
+
+/** One continue-watching tile: 16:9 thumb, resume icon and progress bar (Profile section). */
+@Composable
+private fun ContinueWatchingCard(entry: HistoryEntry, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(150.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(2.dp),
+    ) {
+        Box {
+            LandscapeThumb(
+                url = entry.posterUrl,
+                contentDescription = entry.title,
+                progress = entry.progress,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Surface(
+                modifier = Modifier.align(Alignment.Center).size(34.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+            ) {
+                Icon(
+                    Icons.Outlined.PlayArrow,
+                    contentDescription = stringRes(R.string.section_continue_watching),
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(7.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = entry.title,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = entry.episodeLabel,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 

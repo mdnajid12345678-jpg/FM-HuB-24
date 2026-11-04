@@ -226,6 +226,10 @@ fun FmHubApp(navController: NavHostController) {
                     onOpenHistory = { navController.navigate(Dest.HISTORY) },
                     onOpenSettings = { navController.navigate(Dest.SETTINGS) },
                     onOpenAbout = { navController.navigate(Dest.ABOUT) },
+                    onOpenDetails = { id -> navController.navigate(Dest.details(id)) },
+                    onPlay = { entry ->
+                        navController.navigate(Dest.player(entry.contentId, entry.key.takeIf { entry.isEpisode }))
+                    },
                 )
             }
             composable(
