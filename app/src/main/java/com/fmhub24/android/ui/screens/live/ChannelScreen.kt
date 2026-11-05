@@ -46,6 +46,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -128,27 +129,34 @@ fun ChannelScreen(
         }
     }
 
-    val player = remember(source?.mediaUrl) {
-        val current = source ?: return@remember null
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(
-                DefaultMediaSourceFactory(StreamEngine.dataSourceFactory(current.headers)),
-            )
-            .build()
-            .apply {
-                setMediaItem(
-                    androidx.media3.common.MediaItem.Builder()
-                        .setUri(current.mediaUrl)
-                        .setMimeType(StreamEngine.mimeTypeFor(current))
-                        .build(),
+    // The player is built inside the effect, not in a remember block: a composition that is
+    // thrown away before it commits used to leave a prepared ExoPlayer (and its decoder and
+    // network connection) behind, which piles up while channel hopping.
+    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    DisposableEffect(source?.mediaUrl) {
+        val current = source
+        val built = current?.let { media ->
+            ExoPlayer.Builder(context)
+                .setMediaSourceFactory(
+                    DefaultMediaSourceFactory(StreamEngine.dataSourceFactory(media.headers)),
                 )
-                playWhenReady = true
-                prepare()
-            }
-    }
-
-    DisposableEffect(player) {
-        onDispose { player?.release() }
+                .build()
+                .apply {
+                    setMediaItem(
+                        androidx.media3.common.MediaItem.Builder()
+                            .setUri(media.mediaUrl)
+                            .setMimeType(StreamEngine.mimeTypeFor(media))
+                            .build(),
+                    )
+                    playWhenReady = true
+                    prepare()
+                }
+        }
+        player = built
+        onDispose {
+            player = null
+            built?.release()
+        }
     }
 
     LaunchedEffect(player, playing) {
@@ -182,12 +190,17 @@ fun ChannelScreen(
                     .aspectRatio(16f / 9f),
             ) {
                 if (player != null) {
-                    AndroidView(
-                        factory = { ctx ->
-                            SurfaceView(ctx).apply { player.setVideoSurfaceView(this) }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    // A new player needs a fresh surface: keying on it recreates the view when the
+                    // server (and with it the player) changes, instead of showing a black frame.
+                    key(player) {
+                        val attached = player
+                        AndroidView(
+                            factory = { ctx ->
+                                SurfaceView(ctx).apply { attached?.setVideoSurfaceView(this) }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 } else {
                     RemoteImage(
                         url = channel?.posterUrl,

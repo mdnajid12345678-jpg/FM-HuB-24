@@ -419,6 +419,11 @@ private fun PlayerContent(
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
     val audioTracks = remember(tracks) { trackChoices(tracks, C.TRACK_TYPE_AUDIO) }
     val subtitleTracks = remember(tracks) { trackChoices(tracks, C.TRACK_TYPE_TEXT) }
+    // Tracks refresh every 500ms, so a row captured by a panel can point at a group that is
+    // already gone; never index the track list blindly.
+    fun trackGroup(choice: TrackChoice): Tracks.Group? =
+        tracks.groups.getOrNull(choice.groupIndex)
+            ?.takeIf { choice.trackIndex in 0 until it.length }
     val audioLabel = audioTracks.firstOrNull { it.selected }?.let {
         it.label ?: stringRes(R.string.player_audio_track, it.trackIndex + 1)
     } ?: state.languageKey?.let { SourceSelection.languageLabel(it, false) }
@@ -783,9 +788,11 @@ private fun PlayerContent(
                     val bilingualTrack = subtitleTracks.firstOrNull {
                         it.label?.contains("bilingual", ignoreCase = true) == true
                     }
-                    if (bilingualTrack != null) {
+                    // The track list is refreshed in the background, so a row captured by the
+                    // panel can already point past the groups that exist: never index blindly.
+                    val group = bilingualTrack?.let { trackGroup(it) }
+                    if (group != null && bilingualTrack != null) {
                         if (enabled) {
-                            val group = tracks.groups[bilingualTrack.groupIndex]
                             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -807,17 +814,18 @@ private fun PlayerContent(
                 },
                 onSubtitleDownload = viewModel::downloadSubtitle,
                 onSelectAudioTrack = { choice ->
-                    val group = tracks.groups[choice.groupIndex]
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                        .addOverride(
-                            androidx.media3.common.TrackSelectionOverride(
-                                group.mediaTrackGroup,
-                                choice.trackIndex,
-                            ),
-                        )
-                        .build()
+                    trackGroup(choice)?.let { group ->
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                            .addOverride(
+                                androidx.media3.common.TrackSelectionOverride(
+                                    group.mediaTrackGroup,
+                                    choice.trackIndex,
+                                ),
+                            )
+                            .build()
+                    }
                 },
                 onSelectSourceLanguage = { language ->
                     viewModel.switchLanguage(language, position, duration)
@@ -837,17 +845,21 @@ private fun PlayerContent(
                 onSubtitleSelect = { groupIndex, trackIndex ->
                     delayedCueEvents.clear()
                     subtitleText = ""
-                    val group = tracks.groups[groupIndex]
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                        .addOverride(
-                            androidx.media3.common.TrackSelectionOverride(
-                                group.mediaTrackGroup,
-                                trackIndex,
-                            ),
-                        )
-                        .build()
+                    tracks.groups.getOrNull(groupIndex)
+                        ?.takeIf { trackIndex in 0 until it.length }
+                        ?.let { group ->
+                            player.trackSelectionParameters =
+                                player.trackSelectionParameters.buildUpon()
+                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                    .addOverride(
+                                        androidx.media3.common.TrackSelectionOverride(
+                                            group.mediaTrackGroup,
+                                            trackIndex,
+                                        ),
+                                    )
+                                    .build()
+                        }
                 },
                 onServer = { server ->
                     viewModel.switchSource(server, position, duration)
@@ -1148,7 +1160,8 @@ private fun ControlsOverlay(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = formatClock(position), color = Color.White, fontSize = 11.sp)
-                val maxSeconds = if (duration > 0L) duration / 1000 else 1L
+                // Never 0..0: a sub-second duration would hand the Slider an empty range.
+                val maxSeconds = (duration / 1000L).coerceAtLeast(1L)
                 Slider(
                     value = (position / 1000f).coerceIn(0f, maxSeconds.toFloat()),
                     onValueChange = { value -> onSeekTo(value.toLong()) },
@@ -2095,7 +2108,8 @@ private fun ReferenceControlsOverlay(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(formatClock(position), color = Color.White, fontSize = 11.sp)
-                val maxSeconds = if (duration > 0L) duration / 1000L else 1L
+                // Never 0..0: a sub-second duration would hand the Slider an empty range.
+                val maxSeconds = (duration / 1000L).coerceAtLeast(1L)
                 Slider(
                     value = (position / 1000f).coerceIn(0f, maxSeconds.toFloat()),
                     onValueChange = { onSeekTo(it.toLong()) },
@@ -2437,8 +2451,9 @@ private fun LandscapeDelayPanel(current: Int, onSelect: (Int) -> Unit) {
 
 @Composable
 private fun LandscapeEpisodePanel(state: PlayerUiState, onSelect: (EpisodeItem) -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
-        state.episodes.forEach { episode ->
+    // A season can hold 1000+ episodes, so this list may only compose the rows on screen.
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(18.dp)) {
+        items(state.episodes, key = { it.key }) { episode ->
             val label = episode.title.orEmpty().ifBlank {
                 "S${episode.seasonNumber} E${episode.episodeNumber}"
             }

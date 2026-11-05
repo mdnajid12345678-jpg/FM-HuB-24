@@ -192,10 +192,14 @@ class PlayerViewModel @Inject constructor(
                     .distinctBy { it.key }
                     .sortedWith(compareBy<EpisodeItem> { it.seasonNumber }.thenBy { it.episodeNumber })
             } else emptyList()
-            val playlist = if (episode != null && episodes.none { it.key == episode.key }) {
-                (episodes + episode)
-                    .sortedWith(compareBy<EpisodeItem> { it.seasonNumber }.thenBy { it.episodeNumber })
-            } else episodes
+            // Distinct by key: the playlist feeds a LazyColumn keyed on EpisodeItem.key, and a
+            // catalog with two rows for the same season/episode number made that list crash.
+            val playlist = (
+                if (episode != null && episodes.none { it.key == episode.key }) episodes + episode
+                else episodes
+                )
+                .distinctBy { it.key }
+                .sortedWith(compareBy<EpisodeItem> { it.seasonNumber }.thenBy { it.episodeNumber })
             val history = watchState.historyFor(contentId, episode?.key)
             val next = episode?.let { current -> playlist.firstOrNull { candidate ->
                 candidate.seasonNumber > current.seasonNumber ||

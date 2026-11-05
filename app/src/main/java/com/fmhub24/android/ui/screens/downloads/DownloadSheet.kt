@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -420,35 +423,43 @@ private fun SeasonBlock(sheet: DownloadSheetState, viewModel: DownloadsViewModel
     }
     Spacer(Modifier.height(8.dp))
 
-    sheet.seasonEpisodes.forEach { episode ->
-        val done = episode.key in finished
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = !done) { viewModel.toggleEpisode(episode.key) }
-                .padding(vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(
-                checked = episode.key in sheet.selectedEpisodes,
-                onCheckedChange = { viewModel.toggleEpisode(episode.key) },
-                enabled = !done,
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "${stringRes(R.string.episode_number, episode.episodeNumber)} · " +
-                    (episode.title ?: ""),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-            if (done) {
-                Text(
-                    text = stringRes(R.string.download_completed),
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.primary,
+    // A season can hold 1000+ episodes: the tick list is bounded and lazy so opening the season
+    // sheet never builds every row (and every checkbox) at once.
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 320.dp),
+    ) {
+        items(sheet.seasonEpisodes, key = { it.key }) { episode ->
+            val done = episode.key in finished
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !done) { viewModel.toggleEpisode(episode.key) }
+                    .padding(vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = episode.key in sheet.selectedEpisodes,
+                    onCheckedChange = { viewModel.toggleEpisode(episode.key) },
+                    enabled = !done,
                 )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${stringRes(R.string.episode_number, episode.episodeNumber)} · " +
+                        (episode.title ?: ""),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                if (done) {
+                    Text(
+                        text = stringRes(R.string.download_completed),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
     }

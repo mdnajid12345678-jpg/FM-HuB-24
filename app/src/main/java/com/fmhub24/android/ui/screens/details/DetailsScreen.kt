@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -115,6 +116,15 @@ fun DetailsScreen(
         }
         else -> {
             val item = state.item ?: return
+            // Episodes can run into the thousands, so listing a season composes only the rows that
+            // are on screen; the counts and the current season's slice are remembered because both
+            // walk the whole episode list.
+            val seasonEpisodes = remember(state.episodes, state.selectedSeason) {
+                viewModel.episodesFor(state.selectedSeason).distinctBy { it.key }
+            }
+            val episodeCounts = remember(state.episodes) {
+                state.episodes.groupingBy { it.seasonNumber }.eachCount()
+            }
             val primaryEpisode = state.history?.let { history ->
                 state.episodes.firstOrNull {
                     it.seasonNumber == history.seasonNumber && it.episodeNumber == history.episodeNumber
@@ -222,24 +232,22 @@ fun DetailsScreen(
                 }
 
                 if (item.usesEpisodes) {
-                    item {
+                    item(key = "seasons") {
                         SeasonSelector(
                             seasons = state.seasons,
                             selectedSeason = state.selectedSeason,
-                            episodeCounts = state.episodes.groupingBy { it.seasonNumber }.eachCount(),
+                            episodeCounts = episodeCounts,
                             onSelect = viewModel::selectSeason,
                         )
                     }
-                    item {
-                        EpisodeList(
-                            episodes = viewModel.episodesFor(state.selectedSeason),
-                            history = state.history,
-                            onClick = { episode -> onPlay(item.id, episode.key) },
-                            onDownload = { episode ->
-                                downloadsViewModel.openSheet(item, episode = episode)
-                            },
-                        )
-                    }
+                    episodeItems(
+                        episodes = seasonEpisodes,
+                        history = state.history,
+                        onClick = { episode -> onPlay(item.id, episode.key) },
+                        onDownload = { episode ->
+                            downloadsViewModel.openSheet(item, episode = episode)
+                        },
+                    )
                 }
 
                 item {
@@ -629,100 +637,118 @@ private fun SeasonSelector(
     }
 }
 
-@Composable
-private fun EpisodeList(
+/**
+ * Adds the season's episodes straight to the screen's LazyColumn. Composing them inside a Column
+ * meant a 1000+ episode season built every row and every thumbnail at once and crashed the app.
+ */
+private fun LazyListScope.episodeItems(
     episodes: List<EpisodeItem>,
     history: com.fmhub24.android.data.repo.HistoryEntry?,
     onClick: (EpisodeItem) -> Unit,
     onDownload: (EpisodeItem) -> Unit,
 ) {
     if (episodes.isEmpty()) {
-        EmptyState(
-            title = stringRes(R.string.no_episodes),
-            detail = stringRes(R.string.empty_home_detail),
-        )
+        item(key = "episodes-empty") {
+            EmptyState(
+                title = stringRes(R.string.no_episodes),
+                detail = stringRes(R.string.empty_home_detail),
+            )
+        }
         return
     }
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        episodes.forEach { episode ->
-            val matchesHistory = history?.seasonNumber == episode.seasonNumber &&
-                history.episodeNumber == episode.episodeNumber
-            val progress = if (matchesHistory) history?.progress ?: 0f else 0f
-            val watched = matchesHistory && progress >= 0.92f
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onClick(episode) }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    items(episodes, key = { "episode-${it.key}" }) { episode ->
+        EpisodeRow(
+            episode = episode,
+            history = history,
+            onClick = { onClick(episode) },
+            onDownload = { onDownload(episode) },
+        )
+    }
+}
+
+@Composable
+private fun EpisodeRow(
+    episode: EpisodeItem,
+    history: com.fmhub24.android.data.repo.HistoryEntry?,
+    onClick: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    val matchesHistory = history?.seasonNumber == episode.seasonNumber &&
+        history.episodeNumber == episode.episodeNumber
+    val progress = if (matchesHistory) history?.progress ?: 0f else 0f
+    val watched = matchesHistory && progress >= 0.92f
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.width(96.dp)) {
+            LandscapeThumb(
+                url = episode.posterUrl,
+                contentDescription = episode.title,
+                progress = if (progress > 0f && !watched) progress else null,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "${stringRes(R.string.episode_number, episode.episodeNumber)} · " +
+                    (episode.title ?: ""),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Status only when there is one: watched, the resume point, or the synopsis.
+            val subtitle = when {
+                watched -> stringRes(R.string.watched)
+                matchesHistory && progress > 0f -> stringRes(
+                    R.string.progress_percent,
+                    (progress * 100).toInt(),
+                )
+                !episode.description.isNullOrBlank() -> episode.description.orEmpty()
+                else -> ""
+            }
+            if (subtitle.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = if (watched) {
+                        MaterialTheme.colorScheme.secondary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        // Design: watched ✓ in green, an in-progress share in blue, otherwise a download ⤓.
+        when {
+            watched -> Icon(
+                Icons.Outlined.Check,
+                contentDescription = stringRes(R.string.watched),
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.secondary,
+            )
+            matchesHistory && progress > 0f -> Text(
+                text = stringRes(R.string.progress_percent, (progress * 100).toInt()),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            else -> IconButton(
+                onClick = onDownload,
+                modifier = Modifier.size(40.dp),
             ) {
-                Box(modifier = Modifier.width(96.dp)) {
-                    LandscapeThumb(
-                        url = episode.posterUrl,
-                        contentDescription = episode.title,
-                        progress = if (progress > 0f && !watched) progress else null,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "${stringRes(R.string.episode_number, episode.episodeNumber)} · " +
-                            (episode.title ?: ""),
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    // Status only when there is one: watched, the resume point, or the synopsis.
-                    val subtitle = when {
-                        watched -> stringRes(R.string.watched)
-                        matchesHistory && progress > 0f -> stringRes(
-                            R.string.progress_percent,
-                            (progress * 100).toInt(),
-                        )
-                        !episode.description.isNullOrBlank() -> episode.description.orEmpty()
-                        else -> ""
-                    }
-                    if (subtitle.isNotBlank()) {
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            text = subtitle,
-                            fontSize = 11.sp,
-                            color = if (watched) {
-                                MaterialTheme.colorScheme.secondary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                // Design: watched ✓ in green, an in-progress share in blue, otherwise a download ⤓.
-                when {
-                    watched -> Icon(
-                        Icons.Outlined.Check,
-                        contentDescription = stringRes(R.string.watched),
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.secondary,
-                    )
-                    matchesHistory && progress > 0f -> Text(
-                        text = stringRes(R.string.progress_percent, (progress * 100).toInt()),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    else -> IconButton(
-                        onClick = { onDownload(episode) },
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            Icons.Outlined.Download,
-                            contentDescription = stringRes(R.string.action_download),
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                Icon(
+                    Icons.Outlined.Download,
+                    contentDescription = stringRes(R.string.action_download),
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

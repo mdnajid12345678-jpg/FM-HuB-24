@@ -49,14 +49,19 @@ class CatalogRepository @Inject constructor(
     suspend fun cachedSeasons(contentId: String): List<SeasonItem> =
         dao.seasons(contentId).map { it.toSeason() }
 
+    /**
+     * One row per episode. The table key also carries the remote episode id, so two rows with the
+     * same season/episode number (which scraped catalogs do contain) would otherwise map to the
+     * same [EpisodeItem.key] and make every LazyColumn keyed on it crash.
+     */
     suspend fun cachedEpisodes(contentId: String): List<EpisodeItem> =
-        dao.episodes(contentId).map(::toEpisode)
+        dao.episodes(contentId).map(::toEpisode).distinctBy { it.key }
 
     fun observeSeasons(contentId: String): Flow<List<SeasonItem>> =
         dao.observeSeasons(contentId).map { rows -> rows.map { it.toSeason() } }
 
     fun observeEpisodes(contentId: String): Flow<List<EpisodeItem>> =
-        dao.observeEpisodes(contentId).map { rows -> rows.map(::toEpisode) }
+        dao.observeEpisodes(contentId).map { rows -> rows.map(::toEpisode).distinctBy { it.key } }
 
     /**
      * Incremental sync: only rows newer than the newest cached row are pulled, then their seasons
@@ -159,14 +164,26 @@ class CatalogRepository @Inject constructor(
                 table = "seasons",
                 query = listOf("select" to "*", "content_id" to "in.($filter)", "order" to "season_number.asc"),
             ).mapNotNull(::seasonFromJson)
-            val episodes = rest.select(
-                table = "episodes",
-                query = listOf(
-                    "select" to "*",
-                    "content_id" to "in.($filter)",
-                    "order" to "season_number.asc,episode_number.asc,sort_order.asc",
-                ),
-            ).mapNotNull(::episodeFromJson)
+            // PostgREST answers with at most 1000 rows, so a long-running show used to lose every
+            // episode past the first thousand. Page the episode read until a short page arrives.
+            val episodes = buildList {
+                var offset = 0
+                while (true) {
+                    val page = rest.select(
+                        table = "episodes",
+                        query = listOf(
+                            "select" to "*",
+                            "content_id" to "in.($filter)",
+                            "order" to "season_number.asc,episode_number.asc,sort_order.asc",
+                            "limit" to EPISODE_PAGE_SIZE.toString(),
+                            "offset" to offset.toString(),
+                        ),
+                    )
+                    page.mapNotNull(::episodeFromJson).forEach { add(it) }
+                    offset += EPISODE_PAGE_SIZE
+                    if (page.size < EPISODE_PAGE_SIZE || offset >= MAX_EPISODES) break
+                }
+            }
 
             contentIds.forEach { contentId ->
                 if (seasons.none { it.contentId == contentId }) dao.clearSeasons(contentId)
@@ -198,6 +215,8 @@ class CatalogRepository @Inject constructor(
     companion object {
         const val PAGE_SIZE = 200
         const val MAX_ROWS = 5_000
+        const val EPISODE_PAGE_SIZE = 1_000
+        const val MAX_EPISODES = 20_000
         const val STRUCTURE_BATCH = 60
         const val REFRESH_DEBOUNCE_MS = 30_000L
 
