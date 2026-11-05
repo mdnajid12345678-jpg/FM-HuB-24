@@ -28,8 +28,13 @@ import androidx.media3.exoplayer.offline.DownloadService
 import androidx.media3.exoplayer.scheduler.Requirements
 import com.fmhub24.android.MainActivity
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /** One row of live download state, mirrored from Media3 for the Downloads screen. */
 data class DownloadState(
@@ -55,6 +60,9 @@ object DownloadEngine {
     const val NOTIFICATION_ID = 4400
     const val SCHEDULER_JOB_ID = 4401
 
+    /** How often live download progress is read while a download runs. */
+    const val PROGRESS_POLL_MS = 1_000L
+
     /** App-defined stop reason used for the per-item pause button (0 means "run again"). */
     const val STOP_REASON_PAUSED_BY_USER = 100
 
@@ -69,6 +77,9 @@ object DownloadEngine {
 
     private val _states = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val states: StateFlow<Map<String, DownloadState>> = _states
+
+    private val progressScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    @Volatile private var progressPolling = false
 
     fun init(context: Context) {
         if (ready) return
@@ -111,6 +122,19 @@ object DownloadEngine {
         downloadIndex.getDownload(id)
             ?.takeIf { it.state == Download.STATE_COMPLETED }
             ?.request
+    }.getOrNull()
+
+    /**
+     * Terminal state (completed or failed) read from Media3's download index. Media3's
+     * [DownloadManager.getCurrentDownloads] leaves terminal downloads out, so after a process
+     * restart a finished row would otherwise show no state at all. Run this off the main thread:
+     * it is a database read. [init] must already have run (the Application does that).
+     */
+    fun storedState(context: Context, id: String): DownloadState? = runCatching {
+        init(context)
+        downloadIndex.getDownload(id)
+            ?.takeIf { it.state == Download.STATE_COMPLETED || it.state == Download.STATE_FAILED }
+            ?.toState()
     }.getOrNull()
 
     fun cacheDataSourceFactory(): DataSource.Factory {
@@ -307,6 +331,9 @@ object DownloadEngine {
     private val listener = object : DownloadManager.Listener {
         override fun onInitialized(manager: DownloadManager) {
             publish(manager.currentDownloads)
+            if (manager.currentDownloads.any { it.state == Download.STATE_DOWNLOADING }) {
+                startProgressPolling()
+            }
         }
 
         override fun onDownloadChanged(
@@ -315,10 +342,33 @@ object DownloadEngine {
             exception: Exception?,
         ) {
             publish(listOf(download))
+            if (download.state == Download.STATE_DOWNLOADING) startProgressPolling()
         }
 
         override fun onDownloadRemoved(manager: DownloadManager, download: Download) {
             _states.value = _states.value - download.request.id
+        }
+    }
+
+    /**
+     * Media3 reports state changes through the listener but not progress updates, so the
+     * percentage the UI shows has to be polled while something is downloading (bug: the progress
+     * bar used to freeze at the value reported when the download entered DOWNLOADING).
+     */
+    private fun startProgressPolling() {
+        if (progressPolling) return
+        progressPolling = true
+        progressScope.launch {
+            try {
+                while (true) {
+                    val active = downloadManager.currentDownloads
+                    publish(active)
+                    if (active.none { it.state == Download.STATE_DOWNLOADING }) break
+                    delay(PROGRESS_POLL_MS)
+                }
+            } finally {
+                progressPolling = false
+            }
         }
     }
 

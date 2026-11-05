@@ -116,7 +116,7 @@
     <string name="no_episodes">No episodes yet</string>
 
     <!-- Series -->
-    <string name="play_first_episode">Play S%1$d E%1$d</string>
+    <string name="play_first_episode">Play S%1$d E%2$d</string>
     <string name="play_episode">Play S%1$d E%2$d</string>
     <string name="continue_episode">Continue S%1$d E%2$d</string>
     <string name="select_season">Select season</string>

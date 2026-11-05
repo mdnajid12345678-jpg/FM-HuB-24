@@ -31,7 +31,7 @@ class LiveTvRepository @Inject constructor(
         table = "live_tv_sources",
         query = listOf(
             "select" to "*",
-            "channel_id" to "eq.$channelId",
+            "channel_id" to "eq.${rest.filterValue(channelId)}",
             "status" to "eq.resolved",
             "order" to "quality.desc.nullslast,server_name.asc",
         ),

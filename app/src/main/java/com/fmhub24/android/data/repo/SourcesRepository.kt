@@ -19,7 +19,13 @@ class SourcesRepository @Inject constructor(
 ) {
     /** All resolved sources attached to a title, including its episodes' rows. */
     suspend fun forContent(contentId: String): List<MediaSource> =
-        query(listOf("select" to "*", "content_id" to "eq.$contentId", "status" to "eq.resolved"))
+        query(
+            listOf(
+                "select" to "*",
+                "content_id" to "eq.${rest.filterValue(contentId)}",
+                "status" to "eq.resolved",
+            ),
+        )
 
     /**
      * Sources for a movie (episode == null) or one episode. Reads a fresh row every time and
@@ -35,7 +41,11 @@ class SourcesRepository @Inject constructor(
         val episodeRowId = episode.id
         if (!episodeRowId.isNullOrBlank()) {
             val byEpisode = query(
-                listOf("select" to "*", "episode_id" to "eq.$episodeRowId", "status" to "eq.resolved"),
+                listOf(
+                    "select" to "*",
+                    "episode_id" to "eq.${rest.filterValue(episodeRowId)}",
+                    "status" to "eq.resolved",
+                ),
             )
             if (byEpisode.isNotEmpty()) return byEpisode
         }
@@ -50,7 +60,7 @@ class SourcesRepository @Inject constructor(
         if (contentIds.isEmpty()) return emptyMap()
         val rows = mutableListOf<MediaSource>()
         contentIds.distinct().chunked(LANGUAGE_INDEX_BATCH_SIZE).forEach { batch ->
-            val ids = batch.joinToString(",") { "\"$it\"" }
+            val ids = batch.joinToString(",") { "\"${rest.filterValue(it)}\"" }
             val resolved = try {
                 query(
                     listOf(
@@ -140,9 +150,10 @@ object SourceSelection {
             .ifEmpty { sources.filter { languageKey == null || matches(it, languageKey) } }
             .ifEmpty { sources }
 
-        return pool.maxWithOrNull(
+        // Lowest codec rank wins (H264 first, then HEVC), then the highest quality, then HLS.
+        return pool.minWithOrNull(
             compareBy<MediaSource> { codecRank(it.codec) }
-                .thenBy { it.quality ?: 0 }
+                .thenByDescending { it.quality ?: 0 }
                 .thenByDescending { it.isHls },
         )
     }

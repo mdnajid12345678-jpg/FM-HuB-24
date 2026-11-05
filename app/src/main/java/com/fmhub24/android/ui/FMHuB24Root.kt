@@ -56,7 +56,6 @@ import com.fmhub24.android.data.ThemeMode
 import com.fmhub24.android.ui.navigation.FmHubApp
 import com.fmhub24.android.ui.theme.FMHuB24Theme
 
-private const val LANGUAGE_SYSTEM = ""
 private const val LANGUAGE_ENGLISH = "en"
 private const val LANGUAGE_BENGALI = "bn"
 

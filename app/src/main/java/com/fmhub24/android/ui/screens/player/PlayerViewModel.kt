@@ -409,7 +409,9 @@ class PlayerViewModel @Inject constructor(
                 val found = sources.forTarget(current.item?.id ?: contentId, current.episode)
                 val pool = SourceSelection.forLanguage(found, languageKey)
                 val chosen = SourceSelection.auto(pool, languageKey) ?: pool.firstOrNull()
-                state.value = current.copy(
+                // Merge into the latest state, not the snapshot taken before the request: a
+                // progress save or an error retry can land while this request is in flight.
+                state.value = state.value.copy(
                     loading = false,
                     source = chosen,
                     alternatives = SourceSelection.serverRows(found, languageKey),
@@ -422,7 +424,7 @@ class PlayerViewModel @Inject constructor(
                 )
                 chosen?.let { attemptedSources += sourceFamily(it) }
             } catch (failure: Exception) {
-                state.value = current.copy(
+                state.value = state.value.copy(
                     loading = false,
                     error = if (failure is DataException) failure
                     else DataException.Malformed(failure.message ?: "source"),

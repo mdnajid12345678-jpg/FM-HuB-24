@@ -45,9 +45,11 @@ The stream error classifier has unit coverage for offline, timeout/TLS and HTTP
 404 cases. Release builds enable R8 shrinking/obfuscation. The GitHub Actions
 workflow runs the unit tests and builds a debug APK on pushes to `main`.
 
-Screen layouts, colours, chips, rows, badges and the splash timeline follow the
-attached `FMHuB24_Designs.html` mockups (accent `#2F78EE`, background `#05052B`,
-elevated `#16165A`, text-only tab bar with `#7DB0FF` active).
+Screen layouts, colours, chips, rows and badges follow the attached
+`FMHuB24_Designs.html` mockups through the palette in `ui/theme/Color.kt`: forest
+green surfaces (background `#08130F`, surface `#102019`, elevated `#14221D`),
+warm amber accent `#F4B84A` and muted `#9BAAA2` secondary text. The bottom bar is
+a floating pill with the active destination labelled in amber.
 
 ## Building the APK on GitHub
 

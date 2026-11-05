@@ -259,6 +259,7 @@ fun FmHubApp(navController: NavHostController) {
                         navController.navigate(Dest.player(contentId, episodeKey))
                     },
                     onOpenChannel = { id -> navController.navigate(Dest.channel(id)) },
+                    onOpenDetails = { id -> navController.navigate(Dest.details(id)) },
                 )
             }
             composable(
@@ -310,7 +311,14 @@ fun FmHubApp(navController: NavHostController) {
                 )
             }
             composable(Dest.HISTORY) {
-                HistoryScreen(onBack = { navController.popBackStack() })
+                HistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onPlay = { entry ->
+                        navController.navigate(
+                            Dest.player(entry.contentId, entry.key.takeIf { entry.isEpisode }),
+                        )
+                    },
+                )
             }
             composable(Dest.MY_LIST) {
                 MyListScreen(

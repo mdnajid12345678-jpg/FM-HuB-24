@@ -17,6 +17,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,12 +66,21 @@ class DownloadsRepository @Inject constructor(
     private val dao: DownloadsDao,
     private val http: OkHttpClient,
 ) {
+    /**
+     * Room metadata joined with Media3's live state. [DownloadEngine.states] only carries
+     * downloads that are not terminal (Media3's getCurrentDownloads() leaves completed and failed
+     * rows out), so a finished row is resolved once against Media3's download index. That lookup
+     * is a database read, so the combine runs on IO.
+     */
     val rows: Flow<List<DownloadRow>> =
         combine(dao.observeAll(), DownloadEngine.states) { records, states ->
             records.map { record ->
-                DownloadRow(record = record, state = states[record.id])
+                DownloadRow(
+                    record = record,
+                    state = states[record.id] ?: DownloadEngine.storedState(context, record.id),
+                )
             }
-        }
+        }.flowOn(Dispatchers.IO)
 
     suspend fun records(): List<DownloadEntity> = dao.all()
 

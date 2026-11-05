@@ -17,7 +17,7 @@ import org.json.JSONObject
 
 /** Honest failure categories shown to the user (spec section 8). */
 enum class StreamError {
-    /** The signed link is gone: HTTP 403/404 or an HLS segment/manifest failure. */
+    /** The signed link is gone: HTTP 403/410, or an HLS segment/manifest failure. */
     EXPIRED,
 
     /** No connectivity at all. */
@@ -95,6 +95,8 @@ object StreamEngine {
         while (current != null && depth < 6) {
             when (current) {
                 is HttpDataSource.InvalidResponseCodeException -> {
+                    // 403/410 mean the signed link is gone; a plain 404 stays a general failure
+                    // on purpose (see the unit test "ordinary missing file is not assumed ...").
                     return when (current.responseCode) {
                         401, 403, 410 -> StreamError.EXPIRED
                         else -> StreamError.FAILED

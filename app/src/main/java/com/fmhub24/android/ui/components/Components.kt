@@ -476,8 +476,12 @@ fun formatBytes(bytes: Long?): String {
         value /= 1024
         unit++
     }
-    val rounded = if (value >= 100 || unit == 0) value.toInt().toString()
-    else ((value * 10).toLong() / 10.0).toString()
+    val rounded = if (value >= 100 || unit == 0) {
+        value.toInt().toString()
+    } else {
+        // Round rather than truncate, so a 1.99 GB file does not read as 1.9 GB.
+        (kotlin.math.round(value * 10) / 10.0).toString()
+    }
     return "$rounded ${units[unit]}"
 }
 

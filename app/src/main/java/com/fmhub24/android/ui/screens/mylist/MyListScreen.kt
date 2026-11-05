@@ -1,7 +1,5 @@
 package com.fmhub24.android.ui.screens.mylist
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -38,7 +36,6 @@ import com.fmhub24.android.ui.components.stringRes
 import com.fmhub24.android.ui.screens.profile.ProfileDataViewModel
 
 /** My list (spec 6.9): a 3-column poster grid, long press removes an entry. */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MyListScreen(
     onBack: () -> Unit,
@@ -109,10 +106,7 @@ fun MyListScreen(
                             item = item,
                             onClick = { onOpenDetails(item.id) },
                             showTitle = true,
-                            modifier = Modifier.combinedClickable(
-                                onClick = { onOpenDetails(item.id) },
-                                onLongClick = { viewModel.removeFromMyList(item.id) },
-                            ),
+                            onLongClick = { viewModel.removeFromMyList(item.id) },
                         )
                     }
                 }

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.fmhub24.android.R
+import com.fmhub24.android.data.repo.HistoryEntry
 import com.fmhub24.android.ui.components.EmptyState
 import com.fmhub24.android.ui.components.LandscapeThumb
 import com.fmhub24.android.ui.components.stringRes
@@ -53,6 +54,7 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     onBack: () -> Unit,
+    onPlay: (HistoryEntry) -> Unit,
     viewModel: ProfileDataViewModel = hiltViewModel(),
 ) {
     val history by viewModel.history.collectAsState()
@@ -113,7 +115,7 @@ fun HistoryScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { /* opening is handled by the caller's route */ }
+                                .clickable { onPlay(entry) }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

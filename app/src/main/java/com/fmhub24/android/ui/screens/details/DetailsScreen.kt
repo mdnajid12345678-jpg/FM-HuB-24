@@ -86,6 +86,7 @@ fun DetailsScreen(
     onBack: () -> Unit,
     onPlay: (String, String?) -> Unit,
     onOpenChannel: (String) -> Unit,
+    onOpenDetails: (String) -> Unit,
     viewModel: DetailsViewModel = hiltViewModel(),
     downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
@@ -96,9 +97,10 @@ fun DetailsScreen(
     var showSeasonSheet by remember { mutableStateOf(false) }
     var expandedDescription by remember { mutableStateOf(false) }
 
-    val downloadState by downloadsViewModel.buttonState(contentId).collectAsState(
-        initial = DownloadButtonState.Idle,
-    )
+    // buttonState() builds a new stateIn flow on every call, so it has to be remembered:
+    // otherwise each recomposition restarts collection from Idle and leaves a coroutine job behind.
+    val downloadStateFlow = remember(contentId) { downloadsViewModel.buttonState(contentId) }
+    val downloadState by downloadStateFlow.collectAsState(initial = DownloadButtonState.Idle)
 
     when {
         state.loading && state.item == null -> LoadingState()
@@ -244,7 +246,7 @@ fun DetailsScreen(
                     SimilarSection(
                         contentId = item.id,
                         similar = viewModel.similar.collectAsState().value,
-                        onOpenDetails = onOpenChannel,
+                        onOpenDetails = onOpenDetails,
                     )
                 }
             }

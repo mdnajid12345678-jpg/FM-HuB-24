@@ -63,6 +63,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.fmhub24.android.R
+import com.fmhub24.android.data.model.CodecSupport
 import com.fmhub24.android.data.model.MediaSource
 import com.fmhub24.android.ui.FmHubLoader
 import com.fmhub24.android.ui.components.EmptyState
@@ -101,8 +102,12 @@ fun ChannelScreen(
     var showServerSheet by remember { mutableStateOf(false) }
     var selectedServer by remember { mutableStateOf<String?>(null) }
 
+    // Default to the best row this phone can actually decode, not just the first one: the list is
+    // ordered by quality, so the first row can be an AV1 stream on a device without AV1.
     val source = remember(sources, selectedServer) {
-        sources.firstOrNull { it.serverLabel == selectedServer } ?: sources.firstOrNull()
+        sources.firstOrNull { it.serverLabel == selectedServer }
+            ?: sources.firstOrNull { CodecSupport.isSupported(it.codec) }
+            ?: sources.firstOrNull()
     }
 
     LaunchedEffect(contentId) {

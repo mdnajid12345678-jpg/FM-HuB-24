@@ -115,7 +115,7 @@
     <string name="no_episodes">এখনো কোনো পর্ব নেই</string>
 
     <!-- Series -->
-    <string name="play_first_episode">S%1$d E%1$d চালান</string>
+    <string name="play_first_episode">S%1$d E%2$d চালান</string>
     <string name="play_episode">S%1$d E%2$d চালান</string>
     <string name="continue_episode">S%1$d E%2$d চালিয়ে যান</string>
     <string name="select_season">সিজন বেছে নিন</string>

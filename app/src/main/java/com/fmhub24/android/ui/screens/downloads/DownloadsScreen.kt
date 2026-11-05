@@ -804,7 +804,9 @@ private fun GroupDetail(
     onOpenDetails: (String) -> Unit,
     onPlay: (String, String?) -> Unit,
 ) {
-    val rows by viewModel.rowsForGroup(contentId).collectAsState()
+    // rowsForGroup() creates a new stateIn flow per call, so remember it for this content.
+    val rowsFlow = remember(contentId) { viewModel.rowsForGroup(contentId) }
+    val rows by rowsFlow.collectAsState()
     val watchProgress by viewModel.watchProgress.collectAsState()
     var season by remember { mutableStateOf<Int?>(null) }
     val seasons = rows.mapNotNull { it.record.seasonNumber }.distinct().sorted()

@@ -44,7 +44,9 @@ class SessionStore @Inject constructor(
         } else {
             AuthSession(
                 accessToken = access,
-                refreshToken = values[REFRESH],
+                // save() stores "" when the session has no refresh token; treat it as absent so
+                // an expiry does not spend a request refreshing with an empty token.
+                refreshToken = values[REFRESH]?.takeIf { it.isNotBlank() },
                 expiresAtEpochMs = values[EXPIRES] ?: 0L,
             )
         }
