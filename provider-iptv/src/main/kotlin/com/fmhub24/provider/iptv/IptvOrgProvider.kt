@@ -140,11 +140,14 @@ class IptvOrgProvider : FmHubProvider {
             group = pending.group,
         ).also { channels[id] = it }
         if (channel.streams.size >= MAX_STREAMS_PER_CHANNEL) return
+        // The name has already been cleaned, so the quality marker is read from the raw name that
+        // parseExtInf kept, falling back to the URL.
+        val quality = pending.quality ?: qualityOf("", url)
         channel.streams += ProviderSource(
-            serverName = "${channel.name} • ${qualityOf(pending.name, url)?.let { "${it}p" } ?: "Live"}",
+            serverName = "${channel.name} • ${quality?.let { "${it}p" } ?: "Live"}",
             url = url,
             linkType = if (url.contains(".m3u8", ignoreCase = true)) "M3U8" else "VIDEO",
-            quality = qualityOf(pending.name, url),
+            quality = quality,
             headers = linkedMapOf<String, String>().apply {
                 // The EXTINF attribute is the default; an #EXTVLCOPT line right before the URL
                 // refines it for that one stream, so it is applied last and wins.
@@ -178,6 +181,8 @@ class IptvOrgProvider : FmHubProvider {
             referrer = attributes["http-referrer"]?.trim()
                 ?.takeIf { it.isNotBlank() }
                 ?: attributes["referrer"]?.trim()?.takeIf { it.isNotBlank() },
+            // Read before cleanupName() drops the "(1080p)" marker from the display name.
+            quality = qualityOf(name, ""),
         )
     }
 
@@ -219,6 +224,7 @@ class IptvOrgProvider : FmHubProvider {
         val group: String,
         val userAgent: String?,
         val referrer: String?,
+        val quality: Int?,
     )
 
     private class MutableChannel(
