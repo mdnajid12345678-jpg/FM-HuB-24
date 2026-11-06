@@ -8,15 +8,6 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-fun String.asBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
-
-val supabaseUrl = providers.environmentVariable("SUPABASE_URL")
-    .orElse(providers.gradleProperty("SUPABASE_URL"))
-    .getOrElse("")
-val supabaseAnonKey = providers.environmentVariable("SUPABASE_ANON_KEY")
-    .orElse(providers.gradleProperty("SUPABASE_ANON_KEY"))
-    .getOrElse("")
-
 android {
     namespace = "com.fmhub24.android"
     compileSdk = 37
@@ -29,9 +20,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-
-        buildConfigField("String", "SUPABASE_URL", supabaseUrl.asBuildConfigString())
-        buildConfigField("String", "SUPABASE_ANON_KEY", supabaseAnonKey.asBuildConfigString())
     }
 
     buildTypes {
@@ -98,10 +86,10 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    implementation(platform(libs.supabase.bom))
-    implementation(libs.supabase.auth)
-    implementation(libs.supabase.postgrest)
-    implementation(libs.ktor.okhttp)
+    // Content comes from providers: the shared ABI plus the providers built into this APK.
+    implementation(project(":provider-api"))
+    implementation(project(":provider-archive"))
+    implementation(project(":provider-iptv"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

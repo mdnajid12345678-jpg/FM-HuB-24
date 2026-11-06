@@ -1,0 +1,9 @@
+{
+  "id": "archive",
+  "name": "Internet Archive",
+  "version": 1,
+  "abi": 1,
+  "providerClassName": "com.fmhub24.provider.archive.ArchiveProvider",
+  "requiresLive": false,
+  "description": "Public-domain and openly licensed films from archive.org"
+}

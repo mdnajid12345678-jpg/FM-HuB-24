@@ -4,103 +4,56 @@ import com.fmhub24.android.data.model.CodecSupport
 import com.fmhub24.android.data.model.DataException
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaSource
-import com.fmhub24.android.data.model.mediaSourceFromJson
-import com.fmhub24.android.data.remote.SupabaseRest
+import com.fmhub24.android.data.provider.ProviderRegistry
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Reads media_sources fresh for every playback or download (spec 5.2 rule 3): rows are never
- * cached because media_url is a short-lived signed link.
+ * Reads playable links from the active provider for every playback or download. Rows are never
+ * cached: signed or short-lived URLs must be read fresh (spec 5.2 rule 3).
  */
 @Singleton
 class SourcesRepository @Inject constructor(
-    private val rest: SupabaseRest,
+    private val providers: ProviderRegistry,
 ) {
-    /** All resolved sources attached to a title, including its episodes' rows. */
-    suspend fun forContent(contentId: String): List<MediaSource> =
-        query(
-            listOf(
-                "select" to "*",
-                "content_id" to "eq.${rest.filterValue(contentId)}",
-                "status" to "eq.resolved",
-            ),
-        )
+    /** All sources attached to a title, including its episodes' rows. */
+    suspend fun forContent(contentId: String): List<MediaSource> = sourcesFor(contentId, null)
+
+    /** Sources for a movie (episode == null) or for one episode. */
+    suspend fun forTarget(contentId: String, episode: EpisodeItem?): List<MediaSource> =
+        sourcesFor(contentId, episode)
 
     /**
-     * Sources for a movie (episode == null) or one episode. Reads a fresh row every time and
-     * falls back to an episode-scoped query when the episode rows are not linked to the title.
-     */
-    suspend fun forTarget(contentId: String, episode: EpisodeItem?): List<MediaSource> {
-        val byContent = forContent(contentId)
-        if (episode == null) return byContent.filter { it.episodeId.isNullOrBlank() }.ifEmpty { byContent }
-
-        val matched = byContent.filter { episode.matchesSource(it) }
-        if (matched.isNotEmpty()) return matched
-
-        val episodeRowId = episode.id
-        if (!episodeRowId.isNullOrBlank()) {
-            val byEpisode = query(
-                listOf(
-                    "select" to "*",
-                    "episode_id" to "eq.${rest.filterValue(episodeRowId)}",
-                    "status" to "eq.resolved",
-                ),
-            )
-            if (byEpisode.isNotEmpty()) return byEpisode
-        }
-        return emptyList()
-    }
-
-    /**
-     * For the Language filter: a transient language index, never stored (spec 5.5).
-     * Falls back when the owner has not added the language/is_dub columns yet.
+     * A transient language index for the Explore filter. Providers do not publish a catalog-wide
+     * language list, so the languages are derived from the sources of the first few titles; the
+     * index stays in memory and is never stored (spec 5.5).
      */
     suspend fun languageIndex(contentIds: List<String>): Map<String, Set<String>> {
         if (contentIds.isEmpty()) return emptyMap()
-        val rows = mutableListOf<MediaSource>()
-        contentIds.distinct().chunked(LANGUAGE_INDEX_BATCH_SIZE).forEach { batch ->
-            val ids = batch.joinToString(",") { "\"${rest.filterValue(it)}\"" }
-            val resolved = try {
-                query(
-                    listOf(
-                        "select" to "content_id,server_name,language,is_dub,status",
-                        "content_id" to "in.($ids)",
-                        "status" to "eq.resolved",
-                    ),
-                )
-            } catch (error: DataException.Http) {
-                if (error.code != 400) throw error
-                query(
-                    listOf(
-                        "select" to "content_id,server_name,status",
-                        "content_id" to "in.($ids)",
-                        "status" to "eq.resolved",
-                    ),
-                )
-            }
-            rows += resolved
-        }
-
+        val provider = providers.catalogProvider() ?: return emptyMap()
         val index = mutableMapOf<String, MutableSet<String>>()
-        rows.forEach { source ->
-            val contentId = source.contentId ?: return@forEach
-            val language = source.language?.takeIf { it.isNotBlank() }
-                ?: SourceLabel.languageOf(source.serverName)
-                ?: "Original"
-            index.getOrPut(contentId) { mutableSetOf() }.add(language)
+        contentIds.distinct().take(LANGUAGE_INDEX_LIMIT).forEach { contentId ->
+            val sources = runCatching { provider.sources(contentId, null) }
+                .getOrNull()
+                .orEmpty()
+            sources.forEach { source ->
+                val language = source.language?.takeIf { it.isNotBlank() }
+                    ?: SourceLabel.languageOf(source.serverName)
+                    ?: "Original"
+                index.getOrPut(contentId) { mutableSetOf() }.add(language)
+            }
         }
         return index
     }
 
-    companion object {
-        const val LANGUAGE_INDEX_BATCH_SIZE = 40
+    private suspend fun sourcesFor(contentId: String, episode: EpisodeItem?): List<MediaSource> {
+        val provider = providers.catalogProvider() ?: throw DataException.NotConfigured()
+        return provider.sources(contentId, episode).filter { it.isPlayable }
     }
 
-    private suspend fun query(params: List<Pair<String, String>>): List<MediaSource> =
-        rest.select(table = "media_sources", query = params)
-            .mapNotNull { json -> runCatching { mediaSourceFromJson(json) }.getOrNull() }
-            .filter { it.isPlayable }
+    companion object {
+        const val LANGUAGE_INDEX_LIMIT = 12
+    }
 }
 
 /** Language/server/quality decisions from spec 5.4. */

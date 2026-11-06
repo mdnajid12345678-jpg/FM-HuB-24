@@ -9,7 +9,7 @@ import com.fmhub24.android.data.model.DataException
 import com.fmhub24.android.data.model.EpisodeItem
 import com.fmhub24.android.data.model.MediaItem
 import com.fmhub24.android.data.model.SeasonItem
-import com.fmhub24.android.data.remote.SupabaseRest
+import com.fmhub24.android.data.provider.ProviderRegistry
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -17,24 +17,30 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
-import org.json.JSONObject
 
 /**
- * Catalog reads and the incremental Room cache (spec 5.1 and 5.5). media_sources is never
- * cached here. Network errors are returned, never hidden.
+ * Catalog reads and the incremental Room cache. Content comes from the active [ProviderRegistry]
+ * provider; the cache keeps the catalog usable offline and keeps search, history and downloads
+ * working without a network round trip. Playable links are never cached here.
+ *
+ * Structure (seasons and episodes) is fetched on demand when a title is opened, because a catalog
+ * of hundreds of titles would otherwise mean hundreds of requests on every refresh.
  */
 @Singleton
 class CatalogRepository @Inject constructor(
     private val dao: CatalogDao,
-    private val rest: SupabaseRest,
+    private val providers: ProviderRegistry,
 ) {
     private val refreshMutex = Mutex()
-    @Volatile private var lastSuccessfulRefreshMs = 0L
+
+    @Volatile
+    private var lastSuccessfulRefreshMs = 0L
+
     val contents: Flow<List<MediaItem>> = dao.observeContents().map { rows -> rows.map(::toMediaItem) }
 
     /**
-     * Escapes the LIKE wildcards the user may type, so "100%" searches for the literal
-     * text "100%" instead of matching everything. Paired with ESCAPE '\' in the DAO query.
+     * Escapes the LIKE wildcards the user may type, so "100%" searches for the literal text "100%"
+     * instead of matching everything. Paired with ESCAPE '\' in the DAO query.
      */
     fun escapeForLike(query: String): String = query
         .replace("\\", "\\\\")
@@ -50,9 +56,9 @@ class CatalogRepository @Inject constructor(
         dao.seasons(contentId).map { it.toSeason() }
 
     /**
-     * One row per episode. The table key also carries the remote episode id, so two rows with the
-     * same season/episode number (which scraped catalogs do contain) would otherwise map to the
-     * same [EpisodeItem.key] and make every LazyColumn keyed on it crash.
+     * One row per episode. The row key also carries the provider episode id, so two rows with the
+     * same season/episode number would otherwise map to the same [EpisodeItem.key] and make every
+     * LazyColumn keyed on it crash.
      */
     suspend fun cachedEpisodes(contentId: String): List<EpisodeItem> =
         dao.episodes(contentId).map(::toEpisode).distinctBy { it.key }
@@ -64,56 +70,28 @@ class CatalogRepository @Inject constructor(
         dao.observeEpisodes(contentId).map { rows -> rows.map(::toEpisode).distinctBy { it.key } }
 
     /**
-     * Incremental sync: only rows newer than the newest cached row are pulled, then their seasons
-     * and episodes. Returns null on success or the failure to show in the UI.
+     * Pulls the provider catalog and replaces the cached one. Returns null on success or the
+     * failure to show in the UI. Titles that the provider no longer lists are dropped together
+     * with their cached structure.
      */
     suspend fun refresh(): DataException? = refreshMutex.withLock {
         if (System.currentTimeMillis() - lastSuccessfulRefreshMs < REFRESH_DEBOUNCE_MS) {
             return@withLock null
         }
         try {
-            val currentIds = mutableSetOf<String>()
-            val structureIds = mutableSetOf<String>()
-            val cachedById = dao.contents().associateBy { it.id }
-            var offset = 0
-            var completeSnapshot = true
-            while (true) {
-                val page = rest.select(
-                    table = "media_contents",
-                    query = listOf(
-                        "select" to "*",
-                        "order" to "id.asc",
-                        "limit" to PAGE_SIZE.toString(),
-                        "offset" to offset.toString(),
-                    ),
-                )
-                // A short page still ends pagination; the snapshot is only complete when the
-                // last page was full and nothing more follows. The previous version broke out
-                // of the loop before offset advanced, so a partial page marked the snapshot
-                // complete even though later pages were never requested.
-                if (page.isEmpty()) break
-                val rows = page.mapNotNull(::contentFromJson)
-                if (rows.isNotEmpty()) dao.upsertContents(rows)
-                rows.forEach { row ->
-                    currentIds += row.id
-                    if (cachedById[row.id]?.updatedAt != row.updatedAt) structureIds += row.id
-                }
-                offset += PAGE_SIZE
-                if (page.size < PAGE_SIZE) break
-                if (offset >= MAX_ROWS) {
-                    completeSnapshot = false
-                    break
-                }
-            }
-            // Never infer deletion from a capped snapshot.
-            if (completeSnapshot) {
-                dao.contents().filter { it.id !in currentIds }.forEach { stale ->
+            val provider = providers.catalogProvider() ?: throw DataException.NotConfigured()
+            val items = provider.catalog()
+            if (items.isEmpty()) throw DataException.Malformed("${provider.id}: empty catalog")
+            val entities = items.map(::toContentEntity)
+            dao.upsertContents(entities)
+            val currentIds = entities.mapTo(mutableSetOf()) { it.id }
+            dao.contents()
+                .filter { it.id !in currentIds }
+                .forEach { stale ->
                     dao.clearSeasons(stale.id)
                     dao.clearEpisodes(stale.id)
                     dao.deleteContent(stale.id)
                 }
-            }
-            syncStructure(structureIds.toList())?.let { return@withLock it }
             lastSuccessfulRefreshMs = System.currentTimeMillis()
             null
         } catch (error: DataException) {
@@ -127,11 +105,9 @@ class CatalogRepository @Inject constructor(
     suspend fun ensureContent(id: String): DataException? {
         if (dao.content(id) != null) return null
         return try {
-            val rows = rest.select(
-                table = "media_contents",
-                query = listOf("select" to "*", "id" to "eq.${rest.filterValue(id)}"),
-            )
-            rows.mapNotNull(::contentFromJson).forEach { dao.upsertContents(listOf(it)) }
+            val provider = providers.catalogProvider() ?: throw DataException.NotConfigured()
+            val item = provider.media(id) ?: throw DataException.Malformed("${provider.id}: no $id")
+            dao.upsertContents(listOf(toContentEntity(item)))
             null
         } catch (error: DataException) {
             error
@@ -140,7 +116,7 @@ class CatalogRepository @Inject constructor(
         }
     }
 
-    /** Seasons and episodes for one title, stored in the cache (spec 5.1 ordering). */
+    /** Seasons and episodes for one title, stored in the cache. */
     suspend fun ensureStructure(contentId: String): DataException? {
         val hasCachedStructure = dao.seasons(contentId).isNotEmpty() ||
             dao.episodes(contentId).isNotEmpty()
@@ -159,32 +135,32 @@ class CatalogRepository @Inject constructor(
 
     private suspend fun syncStructureBatch(contentIds: List<String>): DataException? {
         return try {
-            val filter = contentIds.joinToString(",") { "\"${rest.filterValue(it)}\"" }
-            val seasons = rest.select(
-                table = "seasons",
-                query = listOf("select" to "*", "content_id" to "in.($filter)", "order" to "season_number.asc"),
-            ).mapNotNull(::seasonFromJson)
-            // PostgREST answers with at most 1000 rows, so a long-running show used to lose every
-            // episode past the first thousand. Page the episode read until a short page arrives.
-            val episodes = buildList {
-                var offset = 0
-                while (true) {
-                    val page = rest.select(
-                        table = "episodes",
-                        query = listOf(
-                            "select" to "*",
-                            "content_id" to "in.($filter)",
-                            "order" to "season_number.asc,episode_number.asc,sort_order.asc",
-                            "limit" to EPISODE_PAGE_SIZE.toString(),
-                            "offset" to offset.toString(),
-                        ),
+            val provider = providers.catalogProvider() ?: throw DataException.NotConfigured()
+            val seasons = mutableListOf<SeasonEntity>()
+            val episodes = mutableListOf<EpisodeEntity>()
+            contentIds.forEach { contentId ->
+                provider.seasons(contentId).forEach { season ->
+                    seasons += SeasonEntity(
+                        contentId = contentId,
+                        seasonNumber = season.seasonNumber,
+                        name = season.name,
+                        sortOrder = season.sortOrder,
                     )
-                    page.mapNotNull(::episodeFromJson).forEach { add(it) }
-                    offset += EPISODE_PAGE_SIZE
-                    if (page.size < EPISODE_PAGE_SIZE || offset >= MAX_EPISODES) break
+                }
+                provider.episodes(contentId).forEach { episode ->
+                    episodes += EpisodeEntity(
+                        key = "${contentId}|${episode.seasonNumber}|${episode.episodeNumber}|${episode.id.orEmpty()}",
+                        contentId = contentId,
+                        episodeId = episode.id,
+                        seasonNumber = episode.seasonNumber,
+                        episodeNumber = episode.episodeNumber,
+                        title = episode.title,
+                        description = episode.description,
+                        posterUrl = episode.posterUrl,
+                        sortOrder = episode.sortOrder,
+                    )
                 }
             }
-
             contentIds.forEach { contentId ->
                 if (seasons.none { it.contentId == contentId }) dao.clearSeasons(contentId)
                 if (episodes.none { it.contentId == contentId }) dao.clearEpisodes(contentId)
@@ -200,12 +176,10 @@ class CatalogRepository @Inject constructor(
     }
 
     /** Re-reads the structure of one title, used when the user asks for fresh data. */
-    suspend fun reloadStructure(contentId: String): DataException? {
-        return try {
-            syncStructure(listOf(contentId))
-        } catch (error: DataException) {
-            error
-        }
+    suspend fun reloadStructure(contentId: String): DataException? = try {
+        syncStructure(listOf(contentId))
+    } catch (error: DataException) {
+        error
     }
 
     // ------------------------------------------------------------------------------------------
@@ -213,47 +187,14 @@ class CatalogRepository @Inject constructor(
     // ------------------------------------------------------------------------------------------
 
     companion object {
-        const val PAGE_SIZE = 200
-        const val MAX_ROWS = 5_000
-        const val EPISODE_PAGE_SIZE = 1_000
-        const val MAX_EPISODES = 20_000
-        const val STRUCTURE_BATCH = 60
+        const val STRUCTURE_BATCH = 20
         const val REFRESH_DEBOUNCE_MS = 30_000L
 
-        fun rowId(json: JSONObject, key: String = "id"): String? {
-            if (!json.has(key) || json.isNull(key)) return null
-            return json.opt(key).toString().takeIf { it.isNotBlank() && it != "null" }
-        }
-
-        fun optText(json: JSONObject, key: String): String? {
-            if (!json.has(key) || json.isNull(key)) return null
-            return json.opt(key)?.toString()?.takeIf { it.isNotBlank() && it != "null" }
-        }
-
-        fun optInt(json: JSONObject, key: String): Int? {
-            val raw = optText(json, key) ?: return null
-            return raw.toDoubleOrNull()?.toInt() ?: raw.toIntOrNull()
-        }
-
-        fun optDouble(json: JSONObject, key: String): Double? {
-            val raw = optText(json, key) ?: return null
-            return raw.toDoubleOrNull()
-        }
-
-        fun genresJson(json: JSONObject): String? {
-            if (!json.has("genres") || json.isNull("genres")) return null
-            val value = json.opt("genres")
-            val array = when (value) {
-                is JSONArray -> value
-                is String -> runCatching { JSONArray(value) }.getOrNull()
-                else -> null
-            } ?: return null
-            val cleaned = JSONArray()
-            for (i in 0 until array.length()) {
-                val genre = array.opt(i)?.toString()?.takeIf { it.isNotBlank() }
-                if (genre != null) cleaned.put(genre)
-            }
-            return cleaned.toString()
+        fun genresJson(genres: List<String>): String? {
+            if (genres.isEmpty()) return null
+            val array = JSONArray()
+            genres.forEach { genre -> array.put(genre) }
+            return array.toString()
         }
 
         fun parseGenres(genresJson: String?): List<String> {
@@ -268,56 +209,21 @@ class CatalogRepository @Inject constructor(
             }.getOrDefault(emptyList())
         }
 
-        fun contentFromJson(json: JSONObject): MediaContentEntity? {
-            val id = rowId(json) ?: return null
-            val title = optText(json, "title") ?: optText(json, "original_title") ?: return null
-            return MediaContentEntity(
-                id = id,
-                canonicalKey = optText(json, "canonical_key"),
-                title = title,
-                originalTitle = optText(json, "original_title"),
-                contentType = optText(json, "content_type") ?: ContentType.OTHER.raw,
-                releaseYear = optInt(json, "release_year"),
-                posterUrl = optText(json, "poster_url"),
-                description = optText(json, "description"),
-                genresJson = genresJson(json),
-                status = optText(json, "status"),
-                rating = optDouble(json, "rating"),
-                createdAt = optText(json, "created_at"),
-                updatedAt = optText(json, "updated_at"),
-            )
-        }
-
-        private fun seasonFromJson(json: JSONObject): SeasonEntity? {
-            val contentId = optText(json, "content_id") ?: return null
-            val seasonNumber = optInt(json, "season_number") ?: 0
-            return SeasonEntity(
-                contentId = contentId,
-                seasonNumber = seasonNumber,
-                name = optText(json, "name"),
-                sortOrder = optInt(json, "sort_order"),
-            )
-        }
-
-        private fun episodeFromJson(json: JSONObject): EpisodeEntity? {
-            val contentId = optText(json, "content_id") ?: return null
-            val seasonNumber = optInt(json, "season_number") ?: 0
-            val episodeNumber = optInt(json, "episode_number") ?: 0
-            // The remote episode id is part of the key so duplicate episode_number rows in the
-            // same season no longer overwrite each other via REPLACE (bug #3).
-            val episodeId = rowId(json)
-            return EpisodeEntity(
-                key = "$contentId|$seasonNumber|$episodeNumber|${episodeId.orEmpty()}",
-                contentId = contentId,
-                episodeId = episodeId,
-                seasonNumber = seasonNumber,
-                episodeNumber = episodeNumber,
-                title = optText(json, "title"),
-                description = optText(json, "description"),
-                posterUrl = optText(json, "poster_url"),
-                sortOrder = optInt(json, "sort_order"),
-            )
-        }
+        fun toContentEntity(item: MediaItem): MediaContentEntity = MediaContentEntity(
+            id = item.id,
+            canonicalKey = item.canonicalKey,
+            title = item.title,
+            originalTitle = item.originalTitle,
+            contentType = item.contentType.raw,
+            releaseYear = item.releaseYear,
+            posterUrl = item.posterUrl,
+            description = item.description,
+            genresJson = genresJson(item.genres),
+            status = item.status,
+            rating = item.rating,
+            createdAt = item.createdAt,
+            updatedAt = item.updatedAt,
+        )
 
         fun toMediaItem(entity: MediaContentEntity): MediaItem = MediaItem(
             id = entity.id,

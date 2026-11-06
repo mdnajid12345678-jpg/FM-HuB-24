@@ -10,7 +10,7 @@
     <string name="appearance_title">Appearance</string>
     <string name="language_title">Language</string>
     <string name="catalog_not_connected">Catalog is not connected yet.</string>
-    <string name="catalog_not_connected_detail">No titles are shown until the Supabase catalog is available.</string>
+    <string name="catalog_not_connected_detail">No titles are shown until the content provider answers.</string>
     <string name="language_bengali">বাংলা</string>
     <string name="language_english">English</string>
     <string name="theme_system">System</string>
@@ -292,7 +292,7 @@
     <string name="privacy_policy">Privacy policy</string>
     <string name="terms_disclaimer">Terms and disclaimer</string>
     <string name="terms_text">Only access or distribute content when you have the right to do so. This app reads media from sources configured by its owner; availability and distribution rights are controlled by those providers and the owner. Do not use the app to infringe copyright. This summary is not legal advice.</string>
-    <string name="privacy_policy_text">FMHuB24 reads catalog and media-source data from its configured Supabase service and may use anonymous sign-in. Watch history, My List, search history, preferences, and download metadata are stored on this device. Stream URLs and request headers are fetched when playback or downloads start and are not displayed or shared by the app. This summary does not cover hosting-provider logs or retention; contact the app owner for those details.</string>
+    <string name="privacy_policy_text">FMHuB24 reads catalog and media-source data from the content providers installed in the app. Watch history, My List, search history, preferences, and download metadata are stored on this device. Stream URLs and request headers are fetched when playback or downloads start and are not displayed or shared by the app. This summary does not cover hosting-provider logs or retention; contact the app owner for those details.</string>
     <string name="update_check_unavailable">Automatic updates are not configured for this build. Check the app owner’s official release page for a new version.</string>
     <string name="mail_unavailable">No email app is available on this device.</string>
     <string name="share_text_title">Watch “%1$s” free on FMHuB24</string>

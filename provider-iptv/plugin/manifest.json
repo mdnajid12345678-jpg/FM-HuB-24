@@ -1,0 +1,9 @@
+{
+  "id": "iptv",
+  "name": "Public IPTV (iptv-org)",
+  "version": 1,
+  "abi": 1,
+  "providerClassName": "com.fmhub24.provider.iptv.IptvOrgProvider",
+  "requiresLive": true,
+  "description": "Publicly available IPTV channels from the iptv-org index"
+}

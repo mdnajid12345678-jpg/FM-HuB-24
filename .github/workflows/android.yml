@@ -29,25 +29,23 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
-      - name: Validate Supabase secrets
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "Both SUPABASE_URL and SUPABASE_ANON_KEY repository secrets must be configured."
-            exit 1
-          fi
-          case "$SUPABASE_URL" in
-            https://*) ;;
-            *) echo "SUPABASE_URL must use HTTPS."; exit 1 ;;
-          esac
-
       - name: Build debug APK
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      # Proves the provider build tool works on a clean machine: each provider module is dexed
+      # with d8 and packaged as a .fmkp plugin, exactly like a third-party provider would be.
+      - name: Build provider plugins
+        run: ./gradlew --no-daemon :provider-archive:buildPlugin :provider-iptv:buildPlugin
+
+      - name: Upload provider plugins
+        uses: actions/upload-artifact@v7
+        with:
+          name: fmhub24-provider-plugins
+          path: |
+            provider-archive/build/plugin/*.fmkp
+            provider-iptv/build/plugin/*.fmkp
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
