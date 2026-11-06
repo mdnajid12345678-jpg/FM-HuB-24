@@ -175,7 +175,8 @@ class ArchiveProvider : FmHubProvider {
         return root
     }
 
-    private fun docToMedia(doc: JSONObject): ProviderMedia? {
+    /** Public to the module (not to plugins) so the mapping is covered by real unit tests. */
+    internal fun docToMedia(doc: JSONObject): ProviderMedia? {
         val identifier = doc.optString("identifier").takeIf { it.isNotBlank() } ?: return null
         val title = textOf(doc, "title") ?: identifier
         return ProviderMedia(

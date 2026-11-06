@@ -30,7 +30,7 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+        run: ./gradlew --no-daemon testDebugUnitTest :provider-archive:test :provider-iptv:test assembleDebug
 
       # Proves the provider build tool works on a clean machine: each provider module is dexed
       # with d8 and packaged as a .fmkp plugin, exactly like a third-party provider would be.

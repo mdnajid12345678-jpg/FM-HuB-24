@@ -18,6 +18,7 @@ kotlin {
 
 dependencies {
     api(project(":provider-api"))
+    testImplementation(kotlin("test-junit"))
 }
 
 apply(from = rootProject.file("gradle/provider-plugin.gradle.kts"))

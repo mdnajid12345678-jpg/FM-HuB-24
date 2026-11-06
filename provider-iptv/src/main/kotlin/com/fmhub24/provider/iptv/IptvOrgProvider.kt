@@ -56,7 +56,7 @@ class IptvOrgProvider : FmHubProvider {
             return current
         }
         val playlist = ProviderHttp.getText(PLAYLIST_URL, timeoutMs = DOWNLOAD_TIMEOUT_MS)
-        val parsed = parse(playlist)
+        val parsed = parsePlaylist(playlist)
         if (parsed.channels.isEmpty()) {
             current?.let { return it }
             throw IllegalStateException("iptv-org playlist contained no usable channels")
@@ -65,7 +65,8 @@ class IptvOrgProvider : FmHubProvider {
         return parsed
     }
 
-    private fun parse(playlist: String): Snapshot {
+    /** Public to the module (not to plugins) so the parser is covered by real unit tests. */
+    internal fun parsePlaylist(playlist: String): Snapshot {
         val channels = LinkedHashMap<String, MutableChannel>()
         var pending: PendingChannel? = null
         var pendingHeaders: MutableMap<String, String> = mutableMapOf()
@@ -145,9 +146,12 @@ class IptvOrgProvider : FmHubProvider {
             linkType = if (url.contains(".m3u8", ignoreCase = true)) "M3U8" else "VIDEO",
             quality = qualityOf(pending.name, url),
             headers = linkedMapOf<String, String>().apply {
-                headers["User-Agent"]?.let { put("User-Agent", it) }
+                // The EXTINF attribute is the default; an #EXTVLCOPT line right before the URL
+                // refines it for that one stream, so it is applied last and wins.
                 pending.userAgent?.let { put("User-Agent", it) }
                 pending.referrer?.let { put("Referer", it) }
+                headers["User-Agent"]?.let { put("User-Agent", it) }
+                headers["Referer"]?.let { put("Referer", it) }
             },
             language = "Original",
             isDub = false,
@@ -226,7 +230,7 @@ class IptvOrgProvider : FmHubProvider {
         val streams = mutableListOf<ProviderSource>()
     }
 
-    private data class Snapshot(
+    internal data class Snapshot(
         val loadedAtMs: Long,
         val channels: List<ProviderMedia>,
         val streams: Map<String, List<ProviderSource>>,

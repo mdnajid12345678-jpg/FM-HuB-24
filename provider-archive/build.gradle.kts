@@ -20,6 +20,8 @@ dependencies {
     api(project(":provider-api"))
     // org.json is provided by Android at runtime; it is only needed to compile the parsing code.
     compileOnly("org.json:json:20240303")
+    testImplementation(kotlin("test-junit"))
+    testImplementation("org.json:json:20240303")
 }
 
 apply(from = rootProject.file("gradle/provider-plugin.gradle.kts"))
