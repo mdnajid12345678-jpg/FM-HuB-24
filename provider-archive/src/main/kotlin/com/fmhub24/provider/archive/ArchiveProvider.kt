@@ -112,17 +112,25 @@ class ArchiveProvider : FmHubProvider {
         val groups = episodeGroups(files)
         if (groups.isEmpty()) return emptyList()
         val itemTitle = textOf(meta, "title")?.let(::clean)?.takeIf { it.isNotBlank() }
+        // archive.org names episode files after the episode (`s01e04_ThroneForALoss.mp4`), so the
+        // number and the label come from there instead of the position in the response.
+        val labels = groups.map(::episodeLabel)
+        val numbers = uniqueNumbers(labels.mapIndexed { index, label -> episodeNumber(label, index + 1) })
         return groups.mapIndexed { index, group ->
+            val label = labels[index]
             ProviderEpisode(
                 id = group.key,
                 seasonNumber = 1,
-                episodeNumber = index + 1,
-                title = if (groups.size == 1) itemTitle else "Episode ${index + 1}",
+                episodeNumber = numbers[index],
+                title = when {
+                    groups.size == 1 -> itemTitle ?: label
+                    else -> label ?: "Episode ${numbers[index]}"
+                },
                 description = null,
                 posterUrl = posterUrl(contentId),
-                sortOrder = index,
+                sortOrder = numbers[index],
             )
-        }
+        }.sortedBy { it.episodeNumber }
     }
 
     /**
@@ -266,6 +274,38 @@ class ArchiveProvider : FmHubProvider {
         .toSortedMap()
         .map { (key, group) -> EpisodeGroup(key, group) }
 
+    /** The file name of one episode without its extension, as a display label. */
+    internal fun episodeLabel(group: EpisodeGroup): String? = group.files
+        .firstOrNull()
+        ?.optString("name")
+        ?.substringBeforeLast('.')
+        ?.replace('_', ' ')
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+
+    /** Reads `s01e04`/`e4`/`episode 4` out of a label, falling back to the position. */
+    internal fun episodeNumber(label: String?, fallback: Int): Int =
+        label?.let { EPISODE_PATTERN.find(it.lowercase())?.groupValues?.getOrNull(1)?.toIntOrNull() }
+            ?: fallback
+
+    /**
+     * Two files can carry the same episode number (`s01e01.mp4`, `s01e01-extra.mp4`); the details
+     * screen keys episodes by number, so a duplicate would hide one of them.
+     */
+    internal fun uniqueNumbers(raw: List<Int>): List<Int> {
+        val used = mutableSetOf<Int>()
+        var next = (raw.maxOrNull() ?: 0) + 1
+        return raw.map { number ->
+            if (used.add(number)) {
+                number
+            } else {
+                while (!used.add(next)) next++
+                next++
+                next - 1
+            }
+        }
+    }
+
     internal fun renditionKey(fileName: String): String = fileName
         .substringBeforeLast('.')
         .lowercase()
@@ -385,6 +425,9 @@ class ArchiveProvider : FmHubProvider {
         val TV_COLLECTIONS = listOf("classic_tv")
 
         val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "webm", "mkv", "ogv")
+
+        /** `s01e04`, `e4`, `ep 4`, `episode 4` — the group holds the number only. */
+        val EPISODE_PATTERN = Regex("(?:^|[^0-9])(?:s[0-9]{1,2}[\\s._-]*)?e(?:p|pisode)?[\\s._-]*([0-9]{1,3})")
 
         /** Suffixes archive.org adds to derived files (`x.ia.mp4`, `x_512kb.mp4`, ...). */
         val DERIVED_MARKERS = Regex("(_\\d+kb|\\.ia|_ia|_mpeg4|_derived\\w*)")

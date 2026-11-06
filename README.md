@@ -92,8 +92,12 @@ reach its source reports an offline error instead of an empty catalog.
 - **Series.** An archive.org TV item holds the files of one episode, so it is
   exposed as season 1 with its rendition groups as the episode list: `x.mp4`,
   `x.ia.mp4` and `x_512kb.mp4` are qualities of the *same* episode and stay in one
-  row instead of showing up three times. The details screen then shows the usual
-  season/episode layout and the source sheet lists each file with its height.
+  row instead of showing up three times. The episode number and label are read
+  from the file name (`s01e04_ThroneForALoss.mp4` → episode 4), not from the order
+  of the API response, and two files claiming the same number are renumbered so
+  none of them is hidden. The details screen then shows the usual season/episode
+  layout and the source sheet lists each file with its height. A multi-episode
+  item (e.g. `farscape-s-01`) therefore lists its 22 episodes with real titles.
 - **ANIME stays empty.** There is no public-domain anime collection on
   archive.org and no other licence-clean source is wired in, so the category
   reports an empty state rather than fabricated titles.

@@ -114,6 +114,21 @@ class ArchiveProviderTest {
     }
 
     @Test
+    fun `reads the episode number from the file name`() {
+        assertEquals(4, provider.episodeNumber("farscape s01e04 throne for a loss", 1))
+        assertEquals(12, provider.episodeNumber("e12 something", 99))
+        assertEquals(7, provider.episodeNumber("episode 7", 1))
+        assertEquals(3, provider.episodeNumber("behind the scenes", 3))
+        assertEquals(2, provider.episodeNumber(null, 2))
+    }
+
+    @Test
+    fun `keeps episode numbers unique`() {
+        assertEquals(listOf(1, 3, 2), provider.uniqueNumbers(listOf(1, 1, 2)))
+        assertEquals(listOf(1, 2, 3), provider.uniqueNumbers(listOf(1, 2, 3)))
+    }
+
+    @Test
     fun `drops documents without an identifier`() {
         assertNull(provider.docToMedia(JSONObject("""{"title": "No identifier"}""")))
     }
