@@ -30,7 +30,20 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon testDebugUnitTest :provider-archive:test :provider-iptv:test assembleDebug
+        run: |
+          set +e
+          ./gradlew --no-daemon --stacktrace \
+            testDebugUnitTest :provider-archive:test :provider-iptv:test assembleDebug \
+            > gradle-build.log 2>&1
+          status=$?
+          {
+            echo "### Gradle exit code: $status"
+            echo '```'
+            tail -n 80 gradle-build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 200 gradle-build.log
+          exit $status
 
       # Proves the provider build tool works on a clean machine: each provider module is dexed
       # with d8 and packaged as a .fmkp plugin, exactly like a third-party provider would be.
