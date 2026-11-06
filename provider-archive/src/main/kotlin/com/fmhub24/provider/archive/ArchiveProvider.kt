@@ -32,9 +32,12 @@ class ArchiveProvider : FmHubProvider {
     override fun catalog(): List<ProviderMedia> {
         val collected = LinkedHashMap<String, ProviderMedia>()
         var failure: Exception? = null
-        COLLECTIONS.forEach { collection ->
+        val requested = MOVIE_COLLECTIONS.map { it to "movie" } + TV_COLLECTIONS.map { it to "series" }
+        requested.forEach { (collection, contentType) ->
             try {
-                listing(collection).forEach { media -> collected.putIfAbsent(media.id, media) }
+                listing(collection, contentType).forEach { media ->
+                    collected.putIfAbsent(media.id, media)
+                }
             } catch (error: Exception) {
                 failure = error
             }
@@ -49,7 +52,7 @@ class ArchiveProvider : FmHubProvider {
         val q = buildString {
             append("(title:(\"").append(needle).append("\") OR subject:(\"").append(needle).append("\"))")
             append(" AND mediatype:movies AND collection:(")
-            append(COLLECTIONS.joinToString(" OR "))
+            append((MOVIE_COLLECTIONS + TV_COLLECTIONS).joinToString(" OR "))
             append(')')
         }
         val docs = queryDocs(
@@ -57,7 +60,7 @@ class ArchiveProvider : FmHubProvider {
             rows = SEARCH_ROWS,
             sort = "downloads desc",
         )
-        return docs.mapNotNull(::docToMedia)
+        return docs.mapNotNull { doc -> docToMedia(doc, contentTypeOf(doc)) }
     }
 
     override fun media(id: String): ProviderMedia? {
@@ -70,7 +73,7 @@ class ArchiveProvider : FmHubProvider {
         return ProviderMedia(
             id = id,
             title = clean(title),
-            contentType = "movie",
+            contentType = if (isSeries(meta)) "series" else "movie",
             originalTitle = textOf(meta, "title_alt")?.let(::clean),
             releaseYear = yearOf(meta.opt("year")) ?: yearOf(meta.opt("date")) ?: yearOf(meta.opt("publicdate")),
             posterUrl = posterUrl(id),
@@ -84,9 +87,43 @@ class ArchiveProvider : FmHubProvider {
         )
     }
 
-    override fun seasons(contentId: String): List<ProviderSeason> = emptyList()
+    /**
+     * A TV item of archive.org is one episode, so it exposes a single season. Films expose no
+     * structure at all and the details screen keeps its movie layout.
+     */
+    override fun seasons(contentId: String): List<ProviderSeason> {
+        val root = metadata(contentId) ?: return emptyList()
+        val meta = root.optJSONObject("metadata") ?: return emptyList()
+        val files = root.optJSONArray("files") ?: return emptyList()
+        if (!isSeries(meta) || videoFiles(files).isEmpty()) return emptyList()
+        return listOf(ProviderSeason(seasonNumber = 1, name = "Season 1", sortOrder = 0))
+    }
 
-    override fun episodes(contentId: String): List<ProviderEpisode> = emptyList()
+    /**
+     * Episodes are grouped by the source file they are derived from: archive.org keeps the original
+     * next to its derivations (`x.mp4`, `x.ia.mp4`, `x_512kb.mp4`), and those are qualities of one
+     * episode, not separate episodes.
+     */
+    override fun episodes(contentId: String): List<ProviderEpisode> {
+        val root = metadata(contentId) ?: return emptyList()
+        val meta = root.optJSONObject("metadata") ?: return emptyList()
+        val files = root.optJSONArray("files") ?: return emptyList()
+        if (!isSeries(meta)) return emptyList()
+        val groups = episodeGroups(files)
+        if (groups.isEmpty()) return emptyList()
+        val itemTitle = textOf(meta, "title")?.let(::clean)?.takeIf { it.isNotBlank() }
+        return groups.mapIndexed { index, group ->
+            ProviderEpisode(
+                id = group.key,
+                seasonNumber = 1,
+                episodeNumber = index + 1,
+                title = if (groups.size == 1) itemTitle else "Episode ${index + 1}",
+                description = null,
+                posterUrl = posterUrl(contentId),
+                sortOrder = index,
+            )
+        }
+    }
 
     /**
      * Every video file of the item is a playable row: archive.org keeps an original plus derived
@@ -95,7 +132,12 @@ class ArchiveProvider : FmHubProvider {
     override fun sources(contentId: String, episode: ProviderEpisode?): List<ProviderSource> {
         val root = metadata(contentId) ?: return emptyList()
         val files = root.optJSONArray("files") ?: return emptyList()
-        return videoFiles(files).mapNotNull { file ->
+        val playable = if (episode == null) {
+            videoFiles(files)
+        } else {
+            episodeGroups(files).firstOrNull { it.key == episode.id }?.files ?: videoFiles(files)
+        }
+        return playable.mapNotNull { file ->
             val fileName = file.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val url = "$BASE/download/${ProviderHttp.encodePath(contentId)}/${ProviderHttp.encodePath(fileName)}"
             val quality = heightOf(file)
@@ -115,7 +157,7 @@ class ArchiveProvider : FmHubProvider {
     // archive.org reads
     // ---------------------------------------------------------------------------------------------
 
-    private fun listing(collection: String): List<ProviderMedia> {
+    private fun listing(collection: String, contentType: String): List<ProviderMedia> {
         val docs = queryDocs(
             params = listOf(
                 "q" to "collection:($collection) AND mediatype:movies",
@@ -123,7 +165,7 @@ class ArchiveProvider : FmHubProvider {
             rows = LISTING_ROWS,
             sort = "downloads desc",
         )
-        return docs.mapNotNull(::docToMedia)
+        return docs.mapNotNull { doc -> docToMedia(doc, contentType) }
     }
 
     private fun queryDocs(
@@ -140,6 +182,7 @@ class ArchiveProvider : FmHubProvider {
                 "fl[]" to "date",
                 "fl[]" to "subject",
                 "fl[]" to "description",
+                "fl[]" to "collection",
                 "fl[]" to "publicdate",
                 "fl[]" to "addeddate",
                 "fl[]" to "avg_rating",
@@ -176,13 +219,16 @@ class ArchiveProvider : FmHubProvider {
     }
 
     /** Public to the module (not to plugins) so the mapping is covered by real unit tests. */
-    internal fun docToMedia(doc: JSONObject): ProviderMedia? {
+    internal fun docToMedia(
+        doc: JSONObject,
+        contentType: String = contentTypeOf(doc),
+    ): ProviderMedia? {
         val identifier = doc.optString("identifier").takeIf { it.isNotBlank() } ?: return null
         val title = textOf(doc, "title") ?: identifier
         return ProviderMedia(
             id = identifier,
             title = clean(title),
-            contentType = "movie",
+            contentType = contentType,
             releaseYear = yearOf(doc.opt("year")) ?: yearOf(doc.opt("date")),
             posterUrl = posterUrl(identifier),
             description = textOf(doc, "description")?.let(::clean)?.take(DESCRIPTION_LIMIT),
@@ -197,6 +243,34 @@ class ArchiveProvider : FmHubProvider {
 
     private fun posterUrl(identifier: String): String =
         "$BASE/services/img/${ProviderHttp.encodePath(identifier)}"
+
+    /** A search document carries its collections when `fl[]=collection` was requested. */
+    private fun contentTypeOf(doc: JSONObject): String =
+        if (isSeries(doc)) "series" else "movie"
+
+    private fun isSeries(json: JSONObject): Boolean {
+        val collections = textOf(json, "collection") ?: return false
+        return collections.split(';')
+            .map { it.trim().lowercase() }
+            .any { it in TV_COLLECTIONS }
+    }
+
+    internal data class EpisodeGroup(val key: String, val files: List<JSONObject>)
+
+    /**
+     * Groups video files by the file they were derived from, so one episode keeps its qualities
+     * together instead of showing up several times in the episode list.
+     */
+    internal fun episodeGroups(files: JSONArray): List<EpisodeGroup> = videoFiles(files)
+        .groupBy { file -> renditionKey(file.optString("name")) }
+        .toSortedMap()
+        .map { (key, group) -> EpisodeGroup(key, group) }
+
+    internal fun renditionKey(fileName: String): String = fileName
+        .substringBeforeLast('.')
+        .lowercase()
+        .replace(DERIVED_MARKERS, "")
+        .trim()
 
     // ---------------------------------------------------------------------------------------------
     // Parsing helpers
@@ -305,7 +379,14 @@ class ArchiveProvider : FmHubProvider {
         const val QUERY_SPECIALS = "[:\"\\\\()\\[\\]{}^~]"
 
         /** Collections that are public domain or openly licensed, and hold playable video. */
-        val COLLECTIONS = listOf("feature_films", "classic_cartoons", "short_films")
+        val MOVIE_COLLECTIONS = listOf("feature_films", "classic_cartoons", "short_films")
+
+        /** Public-domain television: archive.org stores one episode per item. */
+        val TV_COLLECTIONS = listOf("classic_tv")
+
         val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "webm", "mkv", "ogv")
+
+        /** Suffixes archive.org adds to derived files (`x.ia.mp4`, `x_512kb.mp4`, ...). */
+        val DERIVED_MARKERS = Regex("(_\\d+kb|\\.ia|_ia|_mpeg4|_derived\\w*)")
     }
 }

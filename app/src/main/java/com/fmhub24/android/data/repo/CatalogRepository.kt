@@ -101,6 +101,32 @@ class CatalogRepository @Inject constructor(
         }
     }
 
+    /**
+     * Asks every catalog provider for titles that are not in the cache yet. Nothing is written to
+     * the catalog table here: the cache mirrors what the provider lists, and a search hit is cached
+     * when the user opens it ([ensureContent]).
+     *
+     * One provider failing does not hide the results of the others; the error is only reported when
+     * nothing at all came back.
+     */
+    suspend fun searchProvider(rawQuery: String): List<MediaItem> {
+        val query = rawQuery.trim()
+        if (query.length < MIN_REMOTE_QUERY) return emptyList()
+        val available = providers.catalogProviders()
+        if (available.isEmpty()) throw DataException.NotConfigured()
+        val merged = LinkedHashMap<String, MediaItem>()
+        var failure: DataException? = null
+        available.forEach { provider ->
+            try {
+                provider.search(query).forEach { item -> merged.putIfAbsent(item.id, item) }
+            } catch (error: DataException) {
+                if (failure == null) failure = error
+            }
+        }
+        if (merged.isEmpty()) failure?.let { throw it }
+        return merged.values.toList()
+    }
+
     /** Pulls one title when it is missing from the cache (deep link, cold start). */
     suspend fun ensureContent(id: String): DataException? {
         if (dao.content(id) != null) return null
@@ -189,6 +215,9 @@ class CatalogRepository @Inject constructor(
     companion object {
         const val STRUCTURE_BATCH = 20
         const val REFRESH_DEBOUNCE_MS = 30_000L
+
+        /** One character would match half of archive.org; provider search needs a real word. */
+        const val MIN_REMOTE_QUERY = 2
 
         fun genresJson(genres: List<String>): String? {
             if (genres.isEmpty()) return null

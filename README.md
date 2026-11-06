@@ -69,12 +69,34 @@ Providers shipped in the APK:
 
 | Provider | Module | What it serves |
 | --- | --- | --- |
-| Internet Archive (`archive`) | `:provider-archive` | Public-domain / openly licensed films from `archive.org` (advancedsearch → metadata → download) |
+| Internet Archive (`archive`) | `:provider-archive` | Public-domain / openly licensed films **and** television from `archive.org` (advancedsearch → metadata → download) |
 | Public IPTV (`iptv`) | `:provider-iptv` | Live channels from the public `iptv-org` playlist, including each stream's declared User-Agent/Referer |
 
 Structure (seasons and episodes) is fetched on demand when a title is opened, so
 refreshing the catalog never means one request per title. A provider that cannot
 reach its source reports an offline error instead of an empty catalog.
+
+### Catalog, search and series
+
+- **Catalog.** `catalog()` pulls the newest/most downloaded titles of each
+  collection it supports: `feature_films`, `classic_cartoons` and `short_films`
+  become movies, `classic_tv` (11 000+ public-domain episodes) becomes series.
+  The mapping is a real archive.org field — the item's `collection` — not a guess
+  (`contentTypeOf` in `ArchiveProvider`).
+- **Search.** Typing filters the cached catalog immediately, and pressing enter
+  (or the keyboard search key) also asks the providers; those extra hits are
+  merged into the result list for that query only and are **not** written to the
+  catalog table. A title is cached when it is opened, which is what fills its
+  details and links. Queries shorter than two characters stay local, so a single
+  letter is not sent to archive.org.
+- **Series.** An archive.org TV item holds the files of one episode, so it is
+  exposed as season 1 with its rendition groups as the episode list: `x.mp4`,
+  `x.ia.mp4` and `x_512kb.mp4` are qualities of the *same* episode and stay in one
+  row instead of showing up three times. The details screen then shows the usual
+  season/episode layout and the source sheet lists each file with its height.
+- **ANIME stays empty.** There is no public-domain anime collection on
+  archive.org and no other licence-clean source is wired in, so the category
+  reports an empty state rather than fabricated titles.
 
 ### The ABI (`:provider-api`)
 
@@ -129,6 +151,23 @@ one bad plugin never stops the app.
 
 **Security note:** plugins run in-process with the app's permissions. Only install
 `.fmkp` files you built or trust, and never ship a plugin you have not reviewed.
+
+**Installing a plugin today.** There is no in-app installer: a picker that writes
+into `filesDir/providers` can only be reached through an exported activity, and
+both obvious designs are unsafe or broken — a broadcast receiver is spoofable by
+any app, and `ACTION_VIEW` with a custom extension never matches because Android
+resolves document MIME types, not file suffixes. Until a reviewed installer
+exists, copy the file into the app's private directory with a debuggable build:
+
+```bash
+adb push archive.fmkp /data/local/tmp/
+adb shell run-as com.fmhub24.android sh -c \
+  'mkdir -p files/providers && cp /data/local/tmp/archive.fmkp files/providers/'
+adb shell am force-stop com.fmhub24.android   # rescan on next start
+```
+
+The loader skips a plugin with a newer ABI, a missing class or a corrupt zip, so a
+bad file cannot stop the app from starting.
 
 ## Building a provider plugin
 

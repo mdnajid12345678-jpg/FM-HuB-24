@@ -10,6 +10,7 @@ import com.fmhub24.android.data.repo.WatchStateRepository
 import com.fmhub24.android.ui.components.CatalogFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,9 +39,20 @@ class ExploreViewModel @Inject constructor(
     private val catalogItems = catalog.contents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Hits the provider returned for the last submitted query; never written to the cache. */
+    private val remoteResults = MutableStateFlow<List<MediaItem>>(emptyList())
+    private val remoteQuery = MutableStateFlow("")
+    private var searchJob: Job? = null
+
+    /** The cached catalog plus whatever the provider found for the submitted query. */
+    private val searchableItems: StateFlow<List<MediaItem>> =
+        combine(catalogItems, remoteResults) { local, remote ->
+            if (remote.isEmpty()) local else (local + remote).distinctBy { it.id }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Everything that matches the text and the filter sheet. */
     val results: StateFlow<List<MediaItem>> = combine(
-        catalogItems,
+        searchableItems,
         query,
         filter,
         languageIndex,
@@ -86,11 +98,42 @@ class ExploreViewModel @Inject constructor(
 
     fun setQuery(value: String) {
         query.value = value
+        // Provider hits belong to the query that produced them: typing something else drops them
+        // instead of mixing the previous search into the new one.
+        if (!value.trim().equals(remoteQuery.value, ignoreCase = true)) clearRemoteResults()
     }
 
     fun submitSearch() {
         val text = query.value.trim()
-        if (text.isNotEmpty()) viewModelScope.launch { watchState.recordSearch(text) }
+        if (text.isEmpty()) return
+        viewModelScope.launch { watchState.recordSearch(text) }
+        searchProvider(text)
+    }
+
+    /**
+     * Runs only on submit, so typing does not send a request per character. Results are held in
+     * memory and merged into [results]; opening one caches it through the details screen.
+     */
+    private fun searchProvider(text: String) {
+        if (text.length < MIN_REMOTE_QUERY) return
+        if (text.equals(remoteQuery.value, ignoreCase = true) && remoteResults.value.isNotEmpty()) return
+        remoteQuery.value = text
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            remoteResults.value = try {
+                catalog.searchProvider(text)
+            } catch (error: DataException) {
+                emptyList()
+            } catch (error: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    private fun clearRemoteResults() {
+        searchJob?.cancel()
+        remoteQuery.value = ""
+        if (remoteResults.value.isNotEmpty()) remoteResults.value = emptyList()
     }
 
     fun openItem(item: MediaItem) {
@@ -151,5 +194,10 @@ class ExploreViewModel @Inject constructor(
                 languageIndexLoading.value = false
             }
         }
+    }
+
+    private companion object {
+        /** Matches CatalogRepository.MIN_REMOTE_QUERY: one character is not a search. */
+        const val MIN_REMOTE_QUERY = 2
     }
 }

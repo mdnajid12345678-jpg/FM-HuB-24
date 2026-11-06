@@ -3,6 +3,7 @@ package com.fmhub24.provider.archive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -63,6 +64,53 @@ class ArchiveProviderTest {
         assertEquals(1927, media.releaseYear)
         assertEquals("First paragraph.; Second paragraph.", media.description)
         assertEquals(listOf("Silent", "Science fiction"), media.genres)
+    }
+
+    @Test
+    fun `marks television items as series`() {
+        val tv = JSONObject(
+            """
+            {
+              "identifier": "farscape-s-01-e-04",
+              "title": "Farscape S01E04 Throne for a Loss",
+              "collection": ["classic_tv_1990s", "classic_tv", "television"]
+            }
+            """.trimIndent(),
+        )
+        val film = JSONObject(
+            """
+            {
+              "identifier": "plan_9_from_outer_space",
+              "title": "Plan 9 from Outer Space",
+              "collection": ["feature_films"]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("series", provider.docToMedia(tv)!!.contentType)
+        assertEquals("movie", provider.docToMedia(film)!!.contentType)
+    }
+
+    @Test
+    fun `keeps derived renditions of one episode together`() {
+        val files = JSONArray(
+            """
+            [
+              {"name": "Farscape S01E01.mp4", "height": "360", "format": "MPEG4"},
+              {"name": "Farscape S01E01.ia.mp4", "height": "480", "format": "h.264 IA"},
+              {"name": "Farscape S01E02_512kb.mp4", "height": "480", "format": "512Kb MPEG4"},
+              {"name": "Farscape S01E02.mp4", "height": "360", "format": "MPEG4"},
+              {"name": "Farscape S01E01_thumbs.jpg"}
+            ]
+            """.trimIndent(),
+        )
+
+        val groups = provider.episodeGroups(files)
+
+        assertEquals(2, groups.size)
+        assertEquals("farscape s01e01", groups[0].key)
+        assertEquals(2, groups[0].files.size)
+        assertEquals(2, groups[1].files.size)
     }
 
     @Test
